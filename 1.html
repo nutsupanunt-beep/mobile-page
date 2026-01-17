@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="th" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ระบบจัดการลูกค้า (Supabase)</title>
+  
+  <!-- Import Supabase Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Supabase Data SDK Implementation -->
+  <script>
+    // Configuration - Load from storage or use default
+    const savedConfig = JSON.parse(localStorage.getItem('app_supabase_config') || '{}');
+    var defaultSupabaseUrl = 'https://rmdlpaofydzbuzuozofs.supabase.co';
+    var defaultSupabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtZGxwYW9meWR6YnV6dW96b2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0NzMwMjIsImV4cCI6MjA4NDA0OTAyMn0.JoWZ4m0TrQMgIX5kJEILv6nJbdc9hB-H82DDWPG09A4';
+
+    var supabaseUrl = savedConfig.url || defaultSupabaseUrl;
+    var supabaseKey = savedConfig.key || defaultSupabaseKey;
+    
+    // Create Client Safely
+    var supabaseClient = null;
+    try {
+        if (window.supabase && window.supabase.createClient) {
+            supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+        } else {
+            console.error("Supabase library not loaded correctly.");
+        }
+    } catch (e) {
+        console.error("Failed to initialize Supabase:", e);
+    }
+
+    // Helper function to fetch all data and notify app
+    async function fetchAndNotify() {
+        if (!supabaseClient) {
+            if (window._dataHandler) window._dataHandler.onDataChanged([]);
+            return;
+        }
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('app_records')
+                .select('data');
+            
+            if (error) throw error;
+
+            if (data && window._dataHandler) {
+                const appData = data.map(row => row.data);
+                window._dataHandler.onDataChanged(appData);
+            }
+        } catch (e) {
+            console.error("Error fetching data:", e);
+            if (e.code === '42P01' || e.message.includes('does not exist')) showSetupModal();
+            else if (e.code === '42501') showSetupModal("Permission Denied (RLS)");
+            else showConnectionErrorModal(e.message);
+            
+            // Fallback to empty list to ensure app renders
+            if (window._dataHandler) window._dataHandler.onDataChanged([]);
+        }
+    }
+
+    function showConnectionErrorModal(msg) {
+        // Prevent duplicate modals
+        if(document.getElementById('setup-modal-overlay')) return;
+        
+        const modalId = 'setup-modal-overlay';
+        const div = document.createElement('div');
+        div.id = modalId;
+        div.className = 'modal-overlay';
+        div.style.zIndex = '9999';
+        div.innerHTML = `
+            <div class="modal-content relative" style="max-width: 500px; border-left: 6px solid #ef4444;">
+                <h3 class="text-xl font-bold mb-4 text-red-600">⚠️ เชื่อมต่อฐานข้อมูลไม่สำเร็จ</h3>
+                <p class="mb-4 text-gray-700">ระบบไม่สามารถเชื่อมต่อกับ Supabase ได้</p>
+                <div class="bg-gray-100 p-3 rounded text-xs text-gray-600 mb-4 break-all font-mono">
+                    ${msg}
+                </div>
+                <p class="text-sm text-gray-500 mb-4">กรุณาตรวจสอบ URL หรือ Key ในหน้าตั้งค่า (เข้าสู่ระบบด้วย Admin เพื่อแก้ไข)</p>
+                <button onclick="document.getElementById('${modalId}').remove()" class="w-full py-2 bg-gray-200 rounded hover:bg-gray-300">ปิดหน้าต่าง</button>
+            </div>
+        `;
+        document.body.appendChild(div);
+    }
+
+    function showSetupModal(type = "Missing Table") {
+        const modalId = 'setup-modal-overlay';
+        if (document.getElementById(modalId)) return;
+
+        const div = document.createElement('div');
+        div.id = modalId;
+        div.className = 'modal-overlay';
+        div.style.zIndex = '9999';
+        div.innerHTML = `
+            <div class="modal-content relative" style="max-width: 600px; border-left: 6px solid #ef4444;">
+                <h3 class="text-xl font-bold mb-4 text-red-600">⚠️ แจ้งเตือนระบบ</h3>
+                <p class="mb-4 text-gray-700">ไม่สามารถโหลดข้อมูลได้ (${type})</p>
+                <div class="bg-gray-100 p-4 rounded text-sm text-gray-600 mb-4">
+                    กรุณาตรวจสอบว่าสร้างตาราง <code>app_records</code> ใน Supabase หรือยัง
+                </div>
+                <button onclick="document.getElementById('${modalId}').remove()" class="w-full py-2 bg-gray-200 rounded hover:bg-gray-300">ปิดหน้าต่าง</button>
+            </div>
+        `;
+        document.body.appendChild(div);
+    }
+
+    // Real Data SDK
+    window.dataSdk = {
+      init: async (handler) => {
+        window._dataHandler = handler;
+        
+        // Initial Fetch
+        if (supabaseClient) {
+            fetchAndNotify();
+            supabaseClient.channel('public:app_records')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'app_records' }, () => {
+                    fetchAndNotify();
+                })
+                .subscribe();
+        } else {
+            setTimeout(() => handler.onDataChanged([]), 0);
+        }
+
+        return { isOk: true };
+      },
+      create: async (record) => {
+        if (!supabaseClient) return { isOk: false, error: { message: "Offline" } };
+        try {
+          const { error } = await supabaseClient.from('app_records').insert({ id: record.id, type: record.type, data: record });
+          if (error) throw error;
+          fetchAndNotify(); 
+          return { isOk: true };
+        } catch (e) {
+          if (e.code === '42P01') showSetupModal();
+          return { isOk: false, error: { message: e.message } };
+        }
+      },
+      update: async (record) => {
+        if (!supabaseClient) return { isOk: false, error: { message: "Offline" } };
+        try {
+          const { error } = await supabaseClient.from('app_records').update({ data: record, type: record.type }).eq('id', record.id);
+          if (error) throw error;
+          fetchAndNotify();
+          return { isOk: true };
+        } catch (e) { return { isOk: false, error: { message: e.message } }; }
+      },
+      delete: async (record) => {
+        if (!supabaseClient) return { isOk: false, error: { message: "Offline" } };
+        try {
+          const { error } = await supabaseClient.from('app_records').delete().eq('id', record.id);
+          if (error) throw error;
+          fetchAndNotify();
+          return { isOk: true };
+        } catch (e) { return { isOk: false, error: { message: e.message } }; }
+      }
+    };
+
+    window.elementSdk = {
+      config: null,
+      init: async (options) => {
+        window.elementSdk.config = options.defaultConfig;
+        if(options.onConfigChange) options.onConfigChange(window.elementSdk.config);
+        return { isOk: true };
+      },
+      setConfig: (newConfig) => {
+        window.elementSdk.config = { ...window.elementSdk.config, ...newConfig };
+      }
+    };
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { box-sizing: border-box; }
+    * { font-family: 'Sarabun', sans-serif; }
+    .sidebar-item { transition: all 0.2s ease; }
+    .sidebar-item:hover { transform: translateX(4px); }
+    .card-hover { transition: all 0.3s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1); }
+    .dark .card-hover:hover { box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3); }
+    .payment-disabled { opacity: 0.5; cursor: not-allowed; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: currentColor; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 20px; right: 20px; padding: 16px 24px; border-radius: 8px; background: #10b981; color: white; font-weight: 500; z-index: 9999; animation: slideIn 0.3s ease-out; }
+    .toast.error { background: #ef4444; }
+    @keyframes slideIn { from { transform: translateX(400px); } to { transform: translateX(0); } }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 999; animation: fadeIn 0.2s ease-in; padding: 20px; }
+    .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; animation: scaleIn 0.2s ease-out; }
+    .dark .modal-content { background: #1f2937; }
+    @keyframes scaleIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    
+    /* Utility to hide scrollbar but keep functionality */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+
+    /* Mobile Sidebar Transition */
+    .sidebar-mobile {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    .sidebar-mobile.open {
+        transform: translateX(0);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-hidden flex items-center justify-center">
+      <div class="flex flex-col items-center gap-4 text-gray-500">
+          <div class="spinner text-blue-500" style="width: 40px; height: 40px;"></div>
+          <p>กำลังโหลดระบบ...</p>
+      </div>
+  </div>
+  <script>
+    const defaultConfig = {
+      app_title: "ระบบจัดการลูกค้า (Online)",
+      menu_add_customer: "เพิ่มข้อมูลลูกค้า",
+      menu_manage_customer: "จัดการรายการลูกค้า",
+      menu_history: "ประวัติการทำรายการ",
+      menu_settings: "การตั้งค่า",
+      menu_account: "บัญชีผู้ใช้",
+      menu_changelog: "ประวัติการอัปเดต",
+      primary_color: "#3b82f6",
+      secondary_color: "#1f2937",
+      text_color: "#111827",
+      background_color: "#f3f4f6",
+      surface_color: "#ffffff"
+    };
+
+    let allRecords = [];
+    let currentUser = null;
+    let currentView = 'add';
+    let editingCustomer = null;
+    let editingUser = null; // For Admin managing users
+    let confirmDeleteId = null;
+    let showingModal = null;
+    
+    // UI State
+    let isMobileSidebarOpen = false;
+    
+    // New variable for search state
+    let manageSearchTerm = '';
+
+    const dataHandler = {
+      onDataChanged(data) {
+        allRecords = data || [];
+        renderApp();
+      }
+    };
+
+    function showToast(message, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = `toast ${isError ? 'error' : ''}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showModal(content) {
+      showingModal = content;
+      renderApp();
+    }
+
+    function hideModal() {
+      showingModal = null;
+      editingUser = null;
+      editingCustomer = null; // Ensure this is cleared
+      confirmDeleteId = null;
+      renderApp();
+    }
+    
+    function toggleMobileSidebar() {
+        isMobileSidebarOpen = !isMobileSidebarOpen;
+        renderApp();
+        // Focus trap or just render is enough because we re-render whole app
+    }
+
+    function hashPassword(password) {
+      let hash = 0;
+      for (let i = 0; i < password.length; i++) {
+        const char = password.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return hash.toString();
+    }
+
+    function checkLogin() {
+      const sessionUser = sessionStorage.getItem('currentUser');
+      if (sessionUser) {
+        currentUser = JSON.parse(sessionUser);
+        if (currentUser.isGuestView && currentView === 'add') {
+            currentView = 'manage';
+        }
+      }
+    }
+
+    function login(username, password) {
+      if (username === 'admin' && password === 'admin') {
+        currentUser = { id: 'super_admin', username: 'Admin (Super)', isAdmin: true };
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showToast('เข้าสู่ระบบ Super Admin สำเร็จ');
+        renderApp();
+        return true;
+      }
+
+      const userRecord = allRecords.find(r => r.type === 'user' && r.username === username && r.password_hash === hashPassword(password));
+      if (userRecord) {
+        currentUser = { username: userRecord.username, id: userRecord.id };
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showToast('เข้าสู่ระบบสำเร็จ');
+        renderApp();
+        return true;
+      }
+      return false;
+    }
+
+    function logout() {
+      currentUser = null;
+      sessionStorage.removeItem('currentUser');
+      currentView = 'add';
+      isMobileSidebarOpen = false;
+      showToast('ออกจากระบบสำเร็จ');
+      renderApp();
+    }
+
+    async function register(username, password) {
+      const exists = allRecords.find(r => r.type === 'user' && r.username === username);
+      if (exists) { showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว', true); return false; }
+
+      const userRecord = {
+        type: 'user', id: 'user_' + Date.now(), username: username, password_hash: hashPassword(password), created_at: new Date().toISOString()
+      };
+
+      const result = await window.dataSdk.create(userRecord);
+      if (result.isOk) { showToast('ลงทะเบียนสำเร็จ'); return true; } 
+      else { showToast('เกิดข้อผิดพลาด: ' + result.error.message, true); return false; }
+    }
+
+    async function resetPassword(username, adminKey, newPassword) {
+      if (adminKey !== 'admin') { showToast('รหัส admin ไม่ถูกต้อง', true); return false; }
+      const userRecord = allRecords.find(r => r.type === 'user' && r.username === username);
+      if (!userRecord) { showToast('ไม่พบชื่อผู้ใช้นี้', true); return false; }
+
+      const updatedRecord = { ...userRecord, password_hash: hashPassword(newPassword), updated_at: new Date().toISOString() };
+      const result = await window.dataSdk.update(updatedRecord);
+      if (result.isOk) { showToast('รีเซ็ตรหัสผ่านสำเร็จ'); return true; } 
+      else { showToast('เกิดข้อผิดพลาด: ' + result.error.message, true); return false; }
+    }
+
+    function getUserSettings() {
+      if (!currentUser) return null;
+      if (currentUser.isAdmin) return { is_dark_mode: false, payment_days_before: 5, guest_permissions: 'add,manage,history,settings,edit,changelog' };
+      if (currentUser.isGuestView) return { is_dark_mode: false, payment_days_before: 5, guest_permissions: 'manage' };
+      return allRecords.find(r => r.type === 'settings' && r.account_id === currentUser.id);
+    }
+    
+    function getGlobalGuestSettings() {
+        const settingsRecords = allRecords.filter(r => r.type === 'settings');
+        if (settingsRecords.length > 0) {
+            settingsRecords.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+            return settingsRecords[0];
+        }
+        return null;
+    }
+
+    async function saveSettings(isDarkMode, paymentDaysBefore, guestPermissions) {
+      if (!currentUser || currentUser.isGuestView) return;
+
+      const existing = getUserSettings();
+      let recordToUpdate = existing;
+      
+      if (currentUser.isAdmin) {
+         const anySettings = allRecords.find(r => r.type === 'settings');
+         if(anySettings) recordToUpdate = anySettings;
+         else recordToUpdate = null; 
+      }
+
+      const updatedData = {
+          is_dark_mode: isDarkMode,
+          payment_days_before: paymentDaysBefore,
+          guest_permissions: guestPermissions,
+          updated_at: new Date().toISOString()
+      };
+
+      if (recordToUpdate && recordToUpdate.id) { 
+        await window.dataSdk.update({ ...recordToUpdate, ...updatedData });
+      } else {
+        await window.dataSdk.create({
+          type: 'settings',
+          id: 'settings_' + Date.now(),
+          account_id: currentUser.id,
+          created_at: new Date().toISOString(),
+          ...updatedData
+        });
+      }
+      showToast('บันทึกการตั้งค่าสำเร็จ');
+    }
+
+    function canAccessView(view) {
+      if (currentUser) {
+          if (currentUser.isAdmin) return true;
+          if (currentUser.isGuestView) return ['manage', 'changelog'].includes(view);
+          return true;
+      }
+      const globalSettings = getGlobalGuestSettings();
+      const permissions = globalSettings ? (globalSettings.guest_permissions || '') : 'manage,history,changelog';
+      return permissions.includes(view);
+    }
+    
+    function canEditData() {
+        if (currentUser) {
+            if (currentUser.isAdmin) return true;
+            if (currentUser.isGuestView) return false;
+            return true;
+        }
+        const globalSettings = getGlobalGuestSettings();
+        const permissions = globalSettings ? (globalSettings.guest_permissions || '') : '';
+        return permissions.includes('edit');
+    }
+
+    function isDarkMode() {
+      if (currentUser) {
+          const s = getUserSettings();
+          return s ? s.is_dark_mode : false;
+      }
+      const s = getGlobalGuestSettings();
+      return s ? s.is_dark_mode : false;
+    }
+
+    function getPaymentDaysBefore() {
+      if (currentUser) {
+          const s = getUserSettings();
+          return s ? s.payment_days_before : 5;
+      }
+      const s = getGlobalGuestSettings();
+      return s ? s.payment_days_before : 5;
+    }
+
+    function calculateMonthlyPayment(principal, interestRate, installments, billFee = 0) {
+      if (!principal || !installments) return 0;
+      const monthlyInterest = interestRate / 100;
+      const baseTotalAmount = principal * (1 + (monthlyInterest * installments));
+      const baseMonthly = Math.round(baseTotalAmount / installments);
+      return baseMonthly + billFee;
+    }
+
+    function addMonthsToDate(dateStr, months) {
+      const date = new Date(dateStr);
+      date.setMonth(date.getMonth() + months);
+      return date.toISOString().split('T')[0];
+    }
+
+    function canPayNow(nextPaymentDate, daysBefore) {
+      const today = new Date();
+      const paymentDate = new Date(nextPaymentDate);
+      const daysUntil = Math.ceil((paymentDate - today) / (1000 * 60 * 60 * 24));
+      return daysUntil <= daysBefore;
+    }
+
+    function getAutocompleteData() {
+      return JSON.parse(localStorage.getItem('app_autocomplete_options') || '{"names":[], "products":[], "prices":[], "interests":[], "installments":[], "fees":[]}');
+    }
+    
+    function saveAutocompleteData(data) {
+      const current = getAutocompleteData();
+      const addUnique = (arr, val) => {
+        if(val !== undefined && val !== null && val !== '' && !arr.includes(val)) arr.push(val);
+      };
+      addUnique(current.names, data.customerName);
+      addUnique(current.products, data.product);
+      addUnique(current.prices, data.productPrice);
+      addUnique(current.interests, data.interestRate);
+      addUnique(current.installments, data.installments);
+      addUnique(current.fees, data.billFee);
+      localStorage.setItem('app_autocomplete_options', JSON.stringify(current));
+    }
+
+    async function addCustomer(customerData) {
+      if (allRecords.filter(r => r.type === 'customer').length >= 999) {
+        showToast('ถึงขีดจำกัด 999 รายการแล้ว กรุณาลบรายการบางส่วนก่อน', true);
+        return;
+      }
+      let monthlyPayment = 0;
+      if (customerData.billAmount) monthlyPayment = parseInt(customerData.billAmount);
+      else monthlyPayment = calculateMonthlyPayment(customerData.productPrice, customerData.interestRate, customerData.installments, customerData.billFee);
+
+      const newCustomer = {
+        type: 'customer', id: 'cust_' + Date.now(), customer_name: customerData.customerName,
+        product: customerData.product, product_price: customerData.productPrice, interest_rate: customerData.interestRate,
+        bill_fee: customerData.billFee, bill_amount: monthlyPayment, installments: customerData.installments,
+        contract_date: customerData.contractDate, monthly_payment: monthlyPayment, paid_installments: 0,
+        next_payment_date: addMonthsToDate(customerData.contractDate, 1), status: 'active',
+        account_id: currentUser ? currentUser.id : 'guest', created_at: new Date().toISOString()
+      };
+
+      const result = await window.dataSdk.create(newCustomer);
+      if (result.isOk) {
+        await addHistory('เพิ่มลูกค้า', `เพิ่มลูกค้า ${customerData.customerName} สินค้า ${customerData.product} ราคา ${customerData.productPrice.toLocaleString()} บาท`);
+        saveAutocompleteData(customerData);
+        showToast('เพิ่มข้อมูลลูกค้าสำเร็จ');
+        localStorage.removeItem('add_customer_draft');
+        ['customer-name', 'product', 'product-price', 'interest-rate', 'installments', 'bill-amount-input', 'bill-fee'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+        const dateEl = document.getElementById('contract-date'); if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+        const detailsDiv = document.getElementById('calculation-details'); if (detailsDiv) detailsDiv.classList.add('hidden');
+      } else showToast('เกิดข้อผิดพลาด: ' + result.error.message, true);
+    }
+
+    async function updateCustomer(customerId, updates) {
+      const customer = allRecords.find(r => r.id === customerId);
+      if (!customer) return;
+      const updated = { ...customer, ...updates, updated_at: new Date().toISOString() };
+      const result = await window.dataSdk.update(updated);
+      if (result.isOk) {
+        await addHistory('แก้ไขข้อมูล', `แก้ไขข้อมูลลูกค้า ${customer.customer_name} (สินค้า: ${customer.product})`);
+        showToast('แก้ไขข้อมูลสำเร็จ');
+        editingCustomer = null;
+        hideModal();
+      } else showToast('เกิดข้อผิดพลาด: ' + result.error.message, true);
+    }
+
+    async function makePayment(customerId) {
+      const customer = allRecords.find(r => r.id === customerId);
+      if (!customer) return;
+      const newPaidInstallments = customer.paid_installments + 1;
+      if (newPaidInstallments >= customer.installments) {
+        const updated = { ...customer, paid_installments: newPaidInstallments, status: 'completed', updated_at: new Date().toISOString() };
+        const result = await window.dataSdk.update(updated);
+        if (result.isOk) { await addHistory('ชำระเงินครบ', `${customer.customer_name} ชำระครบแล้ว`); showToast('ชำระเงินครบแล้ว ย้ายไปประวัติสำเร็จ'); }
+      } else {
+        const nextPayment = addMonthsToDate(customer.next_payment_date, 1);
+        const updated = { ...customer, paid_installments: newPaidInstallments, next_payment_date: nextPayment, updated_at: new Date().toISOString() };
+        const result = await window.dataSdk.update(updated);
+        if (result.isOk) { 
+            await addHistory('ชำระเงิน', `ชำระเงิน ${customer.customer_name} งวดที่ ${newPaidInstallments} ยอด ${customer.monthly_payment.toLocaleString()} บาท`);
+            showToast('บันทึกการชำระเงินสำเร็จ'); 
+        }
+      }
+    }
+
+    async function deleteCustomer(customerId) {
+      const customer = allRecords.find(r => r.id === customerId);
+      if (!customer) return;
+      const result = await window.dataSdk.delete(customer);
+      if (result.isOk) { 
+          await addHistory('ลบลูกค้า', `ลบลูกค้า ${customer.customer_name} (สินค้า: ${customer.product})`); 
+          showToast('ลบข้อมูลสำเร็จ'); confirmDeleteId = null; 
+      } 
+      else showToast('เกิดข้อผิดพลาด: ' + result.error.message, true);
+    }
+
+    async function deleteUser(userId) {
+        const user = allRecords.find(r => r.id === userId && r.type === 'user');
+        if(!user) return;
+        const result = await window.dataSdk.delete(user);
+        if(result.isOk) { showToast('ลบบัญชีผู้ใช้สำเร็จ'); hideModal(); }
+        else showToast('ลบไม่สำเร็จ: ' + result.error.message, true);
+    }
+
+    async function adminResetPassword(userId, newPassword) {
+        const user = allRecords.find(r => r.id === userId && r.type === 'user');
+        if(!user) return;
+        const updated = { ...user, password_hash: hashPassword(newPassword), updated_at: new Date().toISOString() };
+        const result = await window.dataSdk.update(updated);
+        if(result.isOk) { showToast('เปลี่ยนรหัสผ่านสำเร็จ'); hideModal(); }
+        else showToast('เปลี่ยนรหัสผ่านไม่สำเร็จ: ' + result.error.message, true);
+    }
+
+    async function addHistory(action, details) {
+      const historyRecord = { type: 'history', id: 'hist_' + Date.now(), history_action: action, history_details: details, history_date: new Date().toISOString(), account_id: currentUser ? currentUser.id : 'guest' };
+      await window.dataSdk.create(historyRecord);
+    }
+
+    function getActiveCustomers() {
+      if (currentUser && currentUser.isAdmin) return allRecords.filter(r => r.type === 'customer' && r.status === 'active');
+      if (currentUser && currentUser.isGuestView) return allRecords.filter(r => r.type === 'customer' && r.status === 'active' && r.account_id === currentUser.targetAccountId);
+      return allRecords.filter(r => r.type === 'customer' && r.status === 'active' && (currentUser ? r.account_id === currentUser.id : true));
+    }
+
+    function getCompletedCustomers() {
+      if (currentUser && currentUser.isAdmin) return allRecords.filter(r => r.type === 'customer' && r.status === 'completed');
+      if (currentUser && currentUser.isGuestView) return allRecords.filter(r => r.type === 'customer' && r.status === 'completed' && r.account_id === currentUser.targetAccountId);
+      return allRecords.filter(r => r.type === 'customer' && r.status === 'completed' && (currentUser ? r.account_id === currentUser.id : true));
+    }
+
+    function getHistoryRecords() {
+      const sorter = (a, b) => new Date(b.history_date) - new Date(a.history_date);
+      if (currentUser && currentUser.isAdmin) return allRecords.filter(r => r.type === 'history').sort(sorter);
+      if (currentUser && currentUser.isGuestView) return allRecords.filter(r => r.type === 'history' && r.account_id === currentUser.targetAccountId).sort(sorter);
+      return allRecords.filter(r => r.type === 'history' && (currentUser ? r.account_id === currentUser.id : true)).sort(sorter);
+    }
+
+    function getCustomersSummary(customersList) {
+      const customers = customersList || getActiveCustomers();
+      const summary = {};
+      customers.forEach(c => {
+        if (!summary[c.customer_name]) summary[c.customer_name] = { name: c.customer_name, totalNextMonth: 0, count: 0 };
+        summary[c.customer_name].totalNextMonth += c.monthly_payment;
+        summary[c.customer_name].count += 1;
+      });
+      return Object.values(summary);
+    }
+
+    function renderApp() {
+      const app = document.getElementById('app');
+      const config = window.elementSdk?.config || defaultConfig;
+      const dark = isDarkMode();
+      
+      if (dark) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+
+      const bgColor = dark ? '#111827' : config.background_color;
+      const surfaceColor = dark ? '#1f2937' : config.surface_color;
+      const textColor = dark ? '#f9fafb' : config.text_color;
+      const primaryColor = config.primary_color;
+      const secondaryColor = dark ? '#374151' : '#e5e7eb';
+
+      app.style.background = bgColor;
+      app.style.color = textColor;
+      // Fixed h-full and overflow handling
+      app.className = 'h-full w-full flex flex-col overflow-hidden';
+
+      let content = '';
+
+      if (!currentUser) {
+        content = renderLoginPage(config, dark, surfaceColor, textColor, primaryColor);
+      } else {
+        const hideScrollbar = ['add', 'settings'].includes(currentView) ? 'no-scrollbar' : '';
+        
+        // Mobile Header + Sidebar + Content
+        content = `
+          <!-- Mobile Header -->
+          <div class="md:hidden flex items-center justify-between p-4 shadow-sm z-20 sticky top-0" style="background: ${surfaceColor}; color: ${textColor};">
+            <button id="mobile-menu-btn" class="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <h1 class="font-bold text-lg truncate flex-1 text-center">${config.app_title}</h1>
+            <div class="w-8"></div> <!-- Spacer -->
+          </div>
+
+          <div class="flex flex-1 h-full overflow-hidden relative">
+            <!-- Sidebar Overlay (Mobile) -->
+            ${isMobileSidebarOpen ? `<div id="sidebar-overlay" class="absolute inset-0 bg-black bg-opacity-50 z-30 md:hidden fade-in"></div>` : ''}
+
+            <!-- Sidebar -->
+            ${renderSidebar(config, dark, surfaceColor, textColor, primaryColor)}
+            
+            <!-- Main Content -->
+            <div class="flex-1 overflow-auto ${hideScrollbar} w-full relative z-0">
+              ${renderContent(config, dark, surfaceColor, textColor, primaryColor, secondaryColor)}
+            </div>
+          </div>
+        `;
+      }
+
+      app.innerHTML = content;
+      attachEventListeners();
+    }
+
+    function renderLoginPage(config, dark, surfaceColor, textColor, primaryColor) {
+      return `
+        <div class="flex items-center justify-center min-h-full p-4 w-full" style="background: ${dark ? '#111827' : config.background_color};">
+          <div class="w-full max-w-md p-8 rounded-xl shadow-lg" style="background: ${surfaceColor};">
+            <h1 class="text-3xl font-bold mb-6 text-center" style="color: ${textColor};">${config.app_title}</h1>
+            <div id="login-form" class="space-y-4">
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="login-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่าน</label><input type="password" id="login-password" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <button id="login-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${primaryColor}; color: white;">เข้าสู่ระบบ</button>
+              <button id="show-register-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ลงทะเบียนบัญชีใหม่</button>
+              <button id="show-reset-btn" class="w-full py-2 text-sm font-medium" style="color: ${primaryColor};">ลืมรหัสผ่าน?</button>
+              <button id="guest-continue-btn" class="w-full py-2 text-sm font-medium underline" style="color: ${textColor}; opacity: 0.7;">เข้าดูแบบผู้เยี่ยมชม (Guest Mode)</button>
+            </div>
+            <div id="guest-select-form" class="space-y-4 hidden">
+                <div class="text-center mb-4"><h3 class="text-lg font-bold" style="color: ${textColor};">เลือกบัญชีที่ต้องการดู</h3><p class="text-sm opacity-60" style="color: ${textColor};">เลือกผู้ใช้เพื่อดูข้อมูล (ไม่สามารถแก้ไขได้)</p></div>
+                <div id="guest-user-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                <button id="back-from-guest-btn" class="w-full py-2 text-sm font-medium" style="color: ${textColor};">กลับไปหน้าเข้าสู่ระบบ</button>
+            </div>
+            <div id="register-form" class="space-y-4 hidden">
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="register-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่าน</label><input type="password" id="register-password" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <button id="register-btn" class="w-full py-3 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">ลงทะเบียน</button>
+              <button id="back-to-login-btn" class="w-full py-2 text-sm font-medium" style="color: ${textColor};">กลับไปหน้าเข้าสู่ระบบ</button>
+            </div>
+            <div id="reset-form" class="space-y-4 hidden">
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="reset-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัส Admin</label><input type="text" id="reset-admin" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่านใหม่</label><input type="password" id="reset-newpassword" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+              <button id="reset-btn" class="w-full py-3 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">รีเซ็ตรหัสผ่าน</button>
+              <button id="back-to-login-btn2" class="w-full py-2 text-sm font-medium" style="color: ${textColor};">กลับไปหน้าเข้าสู่ระบบ</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSidebar(config, dark, surfaceColor, textColor, primaryColor) {
+      const views = [
+        { id: 'add', label: config.menu_add_customer, icon: '➕' },
+        { id: 'manage', label: config.menu_manage_customer, icon: '📋' },
+        { id: 'history', label: config.menu_history, icon: '📜' },
+        { id: 'settings', label: config.menu_settings, icon: '⚙️' },
+        { id: 'changelog', label: config.menu_changelog, icon: '🔄' },
+        { id: 'account', label: config.menu_account, icon: '👤' }
+      ];
+      
+      if (currentUser && currentUser.isAdmin) {
+          views.splice(5, 0, { id: 'manage_users', label: 'จัดการผู้ใช้งาน', icon: '👥' });
+      }
+
+      // Responsive Sidebar Classes
+      // Added overflow-x-hidden to prevent horizontal scrollbar
+      const baseClasses = "w-64 p-6 shadow-lg flex flex-col z-40 transition-transform duration-300 ease-in-out h-full overflow-x-hidden";
+      const mobileClasses = `absolute top-0 left-0 bottom-0 transform ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`;
+      const desktopClasses = "md:relative md:translate-x-0";
+
+      return `
+        <div class="${baseClasses} ${mobileClasses} ${desktopClasses}" style="background: ${surfaceColor};">
+          <div class="mb-8 flex justify-between items-start">
+            <div>
+                <h2 class="text-xl font-bold" style="color: ${textColor};">${config.app_title}</h2>
+                <p class="text-sm mt-2 opacity-80" style="color: ${primaryColor}; font-weight: 500;">
+                  ${currentUser.isAdmin ? '👑 ' : '👤 '}${currentUser.username}
+                </p>
+            </div>
+            <!-- Close Button Mobile Only -->
+            <button id="close-sidebar-btn" class="md:hidden text-gray-500 hover:text-gray-700">✖</button>
+          </div>
+          <!-- Added no-scrollbar class here -->
+          <nav class="space-y-2 flex-1 overflow-y-auto no-scrollbar">
+            ${views.map(v => {
+                if (!canAccessView(v.id)) return '';
+                return `<button data-view="${v.id}" class="sidebar-item w-full text-left px-4 py-3 rounded-lg font-medium flex items-center gap-3 ${currentView === v.id ? 'active-view' : ''}" style="background: ${currentView === v.id ? primaryColor : 'transparent'}; color: ${currentView === v.id ? 'white' : textColor};"><span class="text-xl">${v.icon}</span>${v.label}</button>`;
+            }).join('')}
+          </nav>
+          <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
+            <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.2.9 (No Scrollbar)</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderContent(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
+      if (!canAccessView(currentView)) return `<div class="p-4 md:p-8 flex flex-col items-center justify-center h-full opacity-60"><span class="text-4xl mb-4">🔒</span><p style="color: ${textColor};" class="text-lg">คุณไม่มีสิทธิ์เข้าถึงส่วนนี้</p></div>`;
+      let html = '';
+      if(currentView === 'add') html = renderAddCustomer(config, dark, surfaceColor, textColor, primaryColor);
+      else if(currentView === 'manage') html = renderManageCustomers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor);
+      else if(currentView === 'history') html = renderHistory(config, dark, surfaceColor, textColor, primaryColor);
+      else if(currentView === 'settings') html = renderSettings(config, dark, surfaceColor, textColor, primaryColor);
+      else if(currentView === 'changelog') html = renderChangelog(config, dark, surfaceColor, textColor, primaryColor);
+      else if(currentView === 'manage_users') html = renderManageUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor);
+      else if(currentView === 'account') html = renderAccount(config, dark, surfaceColor, textColor, primaryColor);
+      
+      if (showingModal || editingCustomer || editingUser) html += renderModal(config, dark, surfaceColor, textColor, primaryColor);
+      return html;
+    }
+
+    function renderManageUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
+      const users = allRecords.filter(r => r.type === 'user');
+      return `
+        <div class="p-4 md:p-8">
+          <h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">จัดการผู้ใช้งานระบบ</h2>
+          <div class="overflow-x-auto rounded-xl shadow-sm">
+            <table class="w-full min-w-[600px]" style="background: ${surfaceColor}; border-radius: 12px; overflow: hidden;">
+              <thead style="background: ${dark ? '#374151' : secondaryColor};">
+                <tr>
+                  <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th>
+                  <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ชื่อผู้ใช้</th>
+                  <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">วันที่สมัคร</th>
+                  <th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users.map((u, idx) => `
+                    <tr class="border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
+                      <td class="px-4 py-3" style="color: ${textColor};">${idx + 1}</td>
+                      <td class="px-4 py-3 font-medium" style="color: ${textColor};">${u.username}</td>
+                      <td class="px-4 py-3" style="color: ${textColor};">${new Date(u.created_at).toLocaleDateString('th-TH')}</td>
+                      <td class="px-4 py-3 text-center">
+                        <div class="flex justify-center gap-2">
+                          <button data-reset-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" 
+                            style="background: ${primaryColor}; color: white;" title="เปลี่ยนรหัสผ่าน">
+                            🔑
+                          </button>
+                          <button data-delete-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" 
+                            style="background: #ef4444; color: white;" title="ลบบัญชี">
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                `).join('')}
+                ${users.length === 0 ? `<tr><td colspan="4" class="p-4 text-center opacity-50">ไม่มีผู้ใช้งานในระบบ</td></tr>` : ''}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAddCustomer(config, dark, surfaceColor, textColor, primaryColor) {
+      const draft = JSON.parse(localStorage.getItem('add_customer_draft') || '{}');
+      const autocomplete = getAutocompleteData();
+      return `<div class="p-4 md:p-8 max-w-4xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_add_customer}</h2><div class="p-4 md:p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><form id="add-customer-form" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อลูกค้า</label><input type="text" id="customer-name" value="${draft.customerName || ''}" required list="list-customer-name" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-customer-name">${autocomplete.names.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">สินค้า</label><input type="text" id="product" value="${draft.product || ''}" required list="list-product" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-product">${autocomplete.products.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ราคาสินค้า</label><input type="number" id="product-price" value="${draft.productPrice || ''}" required list="list-product-price" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-product-price">${autocomplete.prices.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ดอกเบี้ย %</label><input type="number" id="interest-rate" value="${draft.interestRate || ''}" required step="0.01" list="list-interest-rate" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-interest-rate">${autocomplete.interests.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">งวดผ่อน</label><input type="number" id="installments" value="${draft.installments || ''}" required list="list-installments" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-installments">${autocomplete.installments.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ค่าบิล</label><input type="number" id="bill-fee" value="${draft.billFee || ''}" min="0" list="list-bill-fee" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><datalist id="list-bill-fee">${autocomplete.fees.map(opt => `<option value="${opt}">`).join('')}</datalist></div>
+            <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รวมจ่ายต่องวด</label><input type="number" id="bill-amount-input" value="${draft.billAmountInput || ''}" readonly class="w-full px-4 py-2 rounded-lg border opacity-70 cursor-not-allowed" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};" tabindex="-1"></div>
+            <div id="contract-date-wrapper"><label class="block text-sm font-medium mb-2" style="color: ${textColor};">วันที่ทำสัญญา</label><input type="date" id="contract-date" value="${draft.contractDate || new Date().toISOString().split('T')[0]}" required class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+            <div class="col-span-full mt-4"><div class="p-4 md:p-6 rounded-xl border border-dashed shadow-sm" style="background: ${dark ? '#374151' : '#f9fafb'}; border-color: ${dark ? '#4b5563' : '#d1d5db'};"><label class="block text-base font-semibold mb-4 border-b pb-2" style="color: ${textColor}; border-color: ${dark ? '#4b5563' : '#e5e7eb'};">สรุปยอดผ่อนชำระ</label><div class="flex flex-col md:flex-row items-center justify-between gap-6"><div class="text-center md:text-left"><p class="text-sm opacity-70 mb-1" style="color: ${textColor};">ค่างวดต่อเดือน (คำนวณ)</p><input type="text" id="bill-amount-display" readonly class="text-3xl font-bold bg-transparent border-none p-0 focus:ring-0 w-full md:w-auto text-center md:text-left" style="color: ${primaryColor};" placeholder="฿0"></div><div id="calculation-details" class="flex-1 w-full grid grid-cols-1 md:grid-cols-3 gap-4 text-center hidden"><div class="p-2 rounded-lg" style="background: ${dark ? '#1f2937' : 'white'};"><p class="text-xs opacity-60 mb-1" style="color: ${textColor};">เงินต้น</p><span id="detail-principal" class="font-medium text-lg" style="color: ${textColor};">0</span></div><div class="p-2 rounded-lg" style="background: ${dark ? '#1f2937' : 'white'};"><p class="text-xs opacity-60 mb-1" style="color: ${textColor};">ดอกเบี้ยรวม</p><span id="detail-interest" class="font-medium text-lg text-red-500">0</span></div><div class="p-2 rounded-lg" style="background: ${dark ? '#1f2937' : 'white'};"><p class="text-xs opacity-60 mb-1" style="color: ${textColor};">ยอดรวมทั้งหมด</p><span id="detail-total" class="font-medium text-lg text-green-600">0</span></div></div></div></div></div>
+        </div>
+        <button type="submit" id="save-customer-btn" class="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 mt-4" style="background: ${primaryColor}; color: white;">บันทึกข้อมูลลูกค้า</button>
+      </form></div></div>`;
+    }
+
+    function renderManageCustomers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
+      let customers = getActiveCustomers();
+      
+      // Filter Logic
+      if (manageSearchTerm) {
+          const term = manageSearchTerm.toLowerCase();
+          customers = customers.filter(c => 
+              c.customer_name.toLowerCase().includes(term) || 
+              c.product.toLowerCase().includes(term)
+          );
+      }
+
+      // Pass filtered customers to summary
+      const summary = getCustomersSummary(customers);
+      
+      const daysBefore = getPaymentDaysBefore();
+      const isAdmin = currentUser && currentUser.isAdmin;
+      return `<div class="p-4 md:p-8">
+        <h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_manage_customer}</h2>
+        
+        <!-- Search Bar -->
+        <div class="relative mb-6">
+            <input type="text" id="manage-search-input" value="${manageSearchTerm}" placeholder="ค้นหา" 
+                class="w-full px-4 py-3 pl-10 rounded-lg border shadow-sm focus:ring-2 focus:ring-opacity-50 transition-all" 
+                style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor}; outline-color: ${primaryColor};">
+            <span class="absolute left-3 top-3.5 text-gray-400">🔍</span>
+            ${manageSearchTerm ? `<button id="manage-search-clear" class="absolute right-3 top-3 text-gray-400 hover:text-gray-600 p-1">✖</button>` : ''}
+        </div>
+
+        <div class="mb-6"><div class="p-4 md:p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><h3 class="text-lg font-semibold mb-4" style="color: ${textColor};">สรุปยอดตามลูกค้า</h3><div class="flex flex-col">${summary.length===0?`<p class="text-center py-4 opacity-50" style="color: ${textColor};">ไม่พบข้อมูล</p>`:''}${summary.map(s=>`<div class="py-4 flex flex-row justify-between items-center border-b last:border-b-0" style="border-color: ${dark?'#374151':'#e5e7eb'};"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm" style="background: ${primaryColor}20; color: ${primaryColor};">${s.count}</div><div><p class="font-medium text-lg" style="color: ${textColor};">${s.name}</p><p class="text-xs opacity-70" style="color: ${textColor};">จำนวนสัญญาที่คงเหลือ</p></div></div><div class="text-right"><p class="text-xs opacity-60 mb-1" style="color: ${textColor};">ยอดรวมงวดถัดไป</p><p class="text-xl font-bold" style="color: ${primaryColor};">฿${s.totalNextMonth.toLocaleString()}</p></div></div>`).join('')}</div></div></div>
+        <div class="overflow-x-auto rounded-xl shadow-sm"><table class="w-full min-w-[900px]" style="background: ${surfaceColor}; border-radius: 12px; overflow: hidden;"><thead style="background: ${dark?'#374151':secondaryColor};"><tr><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลูกค้า</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">สินค้า</th>${isAdmin?`<th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">เจ้าของ</th>`:''}<th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ราคาสินค้า</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ค่างวด</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">งวดทั้งหมด</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">งวดถัดไป</th><th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th></tr></thead><tbody>${customers.map((c,idx)=>{
+            const canPay = canPayNow(c.next_payment_date, daysBefore);
+            const hasEditPermission = canEditData();
+            let ownerName = '';
+            if(isAdmin){ const o=allRecords.find(r=>r.type==='user'&&r.id===c.account_id); ownerName=o?o.username:'-'; }
+            return `<tr class="border-t" style="border-color: ${dark?'#374151':'#e5e7eb'};"><td class="px-4 py-3" style="color: ${textColor};">${idx+1}</td><td class="px-4 py-3 font-medium" style="color: ${textColor};">${c.customer_name}</td><td class="px-4 py-3" style="color: ${textColor};">${c.product}</td>${isAdmin?`<td class="px-4 py-3" style="color: ${primaryColor};">${ownerName}</td>`:''}<td class="px-4 py-3" style="color: ${textColor};">฿${(c.product_price||0).toLocaleString()}</td><td class="px-4 py-3 font-semibold" style="color: ${primaryColor};">฿${c.monthly_payment.toLocaleString()}</td><td class="px-4 py-3" style="color: ${textColor};">${c.paid_installments}/${c.installments}</td><td class="px-4 py-3" style="color: ${textColor};">${new Date(c.next_payment_date).toLocaleDateString('th-TH')}</td><td class="px-4 py-3">${hasEditPermission?`<div class="flex justify-center gap-2"><button data-pay="${c.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all ${canPay?'':'payment-disabled'}" style="background: ${canPay?primaryColor:'#9ca3af'}; color: white;" ${canPay?'':'disabled'} title="ชำระเงิน">💰</button><button data-edit="${c.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" style="background: ${dark?'#374151':secondaryColor}; color: ${textColor};" title="แก้ไข">✏️</button></div>`:`<span class="text-xs opacity-50 block text-center">-</span>`}</td></tr>`;
+        }).join('')}</tbody></table></div></div>`;
+    }
+
+    function renderHistory(config, dark, surfaceColor, textColor, primaryColor) {
+      const history = getHistoryRecords();
+      return `<div class="p-4 md:p-8"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_history}</h2><div class="space-y-3">${history.map(h=>`<div class="p-4 rounded-lg border-l-4" style="background: ${surfaceColor}; border-color: ${primaryColor};"><div class="flex justify-between items-start"><div><p class="font-semibold" style="color: ${textColor};">${h.history_action}</p><p class="text-sm mt-1" style="color: ${textColor}; opacity: 0.7;">${h.history_details}</p></div><p class="text-sm" style="color: ${textColor}; opacity: 0.6;">${new Date(h.history_date).toLocaleString('th-TH')}</p></div></div>`).join('')}</div></div>`;
+    }
+
+    function renderSettings(config, dark, surfaceColor, textColor, primaryColor) {
+      const settings = getUserSettings();
+      const globalSettings = getGlobalGuestSettings();
+      const currentDarkMode = settings ? settings.is_dark_mode : false;
+      const currentDaysBefore = settings ? settings.payment_days_before : 5;
+      const currentPermissions = (currentUser.isAdmin || !settings) ? 
+        (globalSettings ? globalSettings.guest_permissions : 'manage,history,changelog') : 
+        (settings.guest_permissions || 'manage,history,changelog');
+        
+      const isAdmin = currentUser && currentUser.isAdmin;
+
+      return `<div class="p-4 md:p-8 max-w-2xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_settings}</h2><div class="space-y-6"><div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><h3 class="font-semibold mb-4" style="color: ${textColor};">โหมดการแสดงผล</h3><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" id="dark-mode-toggle" ${currentDarkMode ? 'checked' : ''} class="w-5 h-5 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เปิดโหมดมืด</span></label></div><div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><h3 class="font-semibold mb-4" style="color: ${textColor};">การชำระเงิน</h3><label class="block mb-2" style="color: ${textColor};">เปิดให้ชำระเงินก่อนกำหนด (วัน)</label><input type="number" id="payment-days-before" value="${currentDaysBefore}" min="0" max="30" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"><p class="text-sm mt-2" style="color: ${textColor}; opacity: 0.7;">ระบบจะเปิดปุ่มชำระเงินเมื่อใกล้ถึงกำหนดชำระ</p></div>
+      ${isAdmin ? `<div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor}; border: 1px solid ${primaryColor}40;">
+        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: ${textColor};">
+            🔌 การตั้งค่าการเชื่อมต่อ (Admin Only)
+        </h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" style="color: ${textColor};">Supabase URL</label>
+                <input type="text" id="setting-supabase-url" value="${supabaseUrl}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" style="color: ${textColor};">Supabase Key (Anon/Public)</label>
+                <input type="password" id="setting-supabase-key" value="${supabaseKey}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+            </div>
+            <div class="flex gap-2">
+                <button id="save-connection-btn" class="px-4 py-2 rounded-lg font-medium text-sm text-white" style="background: ${primaryColor};">บันทึกและรีโหลด</button>
+                <button id="reset-connection-btn" class="px-4 py-2 rounded-lg font-medium text-sm" style="background: #ef4444; color: white;">รีเซ็ตเป็นค่าเริ่มต้น</button>
+            </div>
+            <p class="text-xs opacity-60" style="color: ${textColor};">⚠️ การเปลี่ยนแปลงค่านี้จะทำให้ระบบรีโหลดใหม่ทันทีเพื่อเชื่อมต่อกับฐานข้อมูลใหม่</p>
+        </div>
+    </div>
+    <div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><h3 class="font-semibold mb-4" style="color: ${textColor};">สิทธิ์ของผู้ไม่มีบัญชี (Guest)</h3><div class="space-y-2"><label class="flex items-center gap-3"><input type="checkbox" id="guest-manage" ${currentPermissions.includes('manage') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าจัดการรายการลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-history" ${currentPermissions.includes('history') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการทำรายการ</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-changelog" ${currentPermissions.includes('changelog') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการอัปเดต</span></label><div class="h-px bg-gray-200 my-2 dark:bg-gray-700"></div><label class="flex items-center gap-3"><input type="checkbox" id="guest-settings" ${currentPermissions.includes('settings') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าการตั้งค่า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-add" ${currentPermissions.includes('add') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าเพิ่มข้อมูลลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-edit" ${currentPermissions.includes('edit') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">แก้ไข / ชำระเงิน / ลบข้อมูล</span></label></div></div>` : ''}
+      <button id="save-settings-btn" class="w-full py-3 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึกการตั้งค่า</button></div></div>`;
+    }
+
+    function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
+      const logs = [
+        {
+            version: "V.2.8 (Mobile Responsive)",
+            date: "17/01/2026",
+            changes: [
+                "ปรับปรุงการแสดงผลบนมือถือ (Responsive Design)",
+                "เพิ่ม Hamburger Menu สำหรับหน้าจอขนาดเล็ก",
+                "ปรับขนาดตารางให้เลื่อนดูได้บนมือถือ"
+            ]
+        },
+        {
+            version: "V.2.7 (Admin Connections)",
+            date: "17/01/2026",
+            changes: [
+                "เพิ่มเมนูตั้งค่าการเชื่อมต่อฐานข้อมูลสำหรับ Admin",
+                "สามารถเปลี่ยน URL และ Key ของ Supabase ได้จากหน้าตั้งค่า"
+            ]
+        },
+        {
+            version: "V.2.6 (Search Filter)",
+            date: "17/01/2026",
+            changes: [
+                "เพิ่มช่องค้นหาในหน้าจัดการลูกค้า",
+                "ระบบกรองข้อมูลแบบ Real-time (ชื่อลูกค้า/สินค้า)",
+                "ปุ่มเคลียร์คำค้นหา"
+            ]
+        },
+        {
+            version: "V.2.5 (User Display)",
+            date: "17/01/2026",
+            changes: [
+                "แสดงชื่อผู้ใช้งานที่กำลังล็อกอินในแถบเมนู",
+                "ปรับตำแหน่งชื่อผู้ใช้งานให้เห็นชัดเจนขึ้น"
+            ]
+        },
+        {
+            version: "V.2.4 (Improved UX)",
+            date: "17/01/2026",
+            changes: [
+                "ปรับปรุงปุ่มลบลูกค้าให้มี Pop-up ยืนยัน",
+                "เพิ่มรายละเอียดในหน้าประวัติการทำรายการ (สินค้า, ราคา)",
+                "แก้ไขการแสดงผล Modal ให้ถูกต้อง"
+            ]
+        },
+        {
+            version: "V.2.3 (Admin)",
+            date: "17/01/2026",
+            changes: [
+                "เพิ่มเมนูจัดการผู้ใช้งานสำหรับ Admin",
+                "Admin สามารถลบบัญชีผู้ใช้ได้",
+                "Admin สามารถเปลี่ยนรหัสผ่านของบัญชีอื่นได้",
+                "แก้ไขบั๊กการบันทึกการตั้งค่า"
+            ]
+        },
+        {
+            version: "V.2.2 (Guest View)",
+            date: "17/01/2026",
+            changes: [
+                "เพิ่มโหมด Guest View เลือกดูข้อมูลตามรายชื่อบัญชี",
+            ]
+        }
+      ];
+      return `<div class="p-4 md:p-8 max-w-3xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_changelog}</h2><div class="space-y-6">${logs.map((log, index) => `<div class="p-6 rounded-xl shadow-md relative overflow-hidden" style="background: ${surfaceColor};"><div class="absolute top-0 left-0 w-2 h-full" style="background: ${index === 0 ? primaryColor : (dark ? '#374151' : '#e5e7eb')}"></div><div class="flex justify-between items-start mb-4 pl-4"><div><span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide" style="background: ${index === 0 ? primaryColor + '20' : (dark ? '#374151' : '#e5e7eb')}; color: ${index === 0 ? primaryColor : textColor};">${log.version}</span><span class="ml-2 text-sm opacity-60" style="color: ${textColor};">${log.date}</span></div></div><ul class="list-disc list-inside space-y-2 pl-4">${log.changes.map(c => `<li style="color: ${textColor}; opacity: 0.8;">${c}</li>`).join('')}</ul></div>`).join('')}</div></div>`;
+    }
+
+    function renderAccount(config, dark, surfaceColor, textColor, primaryColor) {
+      const role = currentUser.isAdmin ? 'Admin' : (currentUser.isGuestView ? 'Guest' : 'User');
+      
+      let permissionText = '';
+      if (currentUser.isAdmin) {
+        permissionText = `
+            <ul class="list-disc list-inside space-y-1 text-sm opacity-80">
+                <li>✅ เข้าถึงทุกเมนูและทุกฟังก์ชัน</li>
+                <li>✅ จัดการข้อมูลลูกค้าของทุกคน</li>
+                <li>✅ ลบและแก้ไขบัญชีผู้ใช้งานอื่น</li>
+                <li>✅ ตั้งค่าการเชื่อมต่อฐานข้อมูล</li>
+            </ul>`;
+      } else if (currentUser.isGuestView) {
+        permissionText = `
+            <ul class="list-disc list-inside space-y-1 text-sm opacity-80">
+                <li>✅ ดูรายการลูกค้าของบัญชีที่เลือก</li>
+                <li>❌ ไม่สามารถเพิ่มข้อมูลใหม่</li>
+                <li>❌ ไม่สามารถแก้ไขหรือลบข้อมูล</li>
+                <li>❌ ไม่สามารถเข้าถึงการตั้งค่า</li>
+            </ul>`;
+      } else {
+        // Normal User
+        permissionText = `
+            <ul class="list-disc list-inside space-y-1 text-sm opacity-80">
+                <li>✅ เพิ่มข้อมูลลูกค้าใหม่</li>
+                <li>✅ จัดการ (แก้ไข/ลบ/ชำระเงิน) ลูกค้าของตนเอง</li>
+                <li>✅ ดูประวัติการทำรายการของตนเอง</li>
+                <li>❌ ไม่สามารถเห็นข้อมูลของผู้อื่น</li>
+            </ul>`;
+      }
+
+      return `<div class="p-4 md:p-8 max-w-2xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_account}</h2><div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><div class="flex items-center gap-4 mb-6"><div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="background: ${primaryColor}20; color: ${primaryColor};">👤</div><div><p class="text-xl font-semibold" style="color: ${textColor};">${currentUser.username}</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">${currentUser.isAdmin ? 'ผู้ดูแลระบบสูงสุด (Super Admin)' : (currentUser.isGuestView ? 'โหมดผู้เยี่ยมชม' : 'บัญชีผู้ใช้')}</p></div></div><div class="space-y-4"><div class="p-4 rounded-lg" style="background: ${dark ? '#374151' : '#f3f4f6'};"><p class="text-sm font-medium mb-1" style="color: ${textColor};">สถิติการใช้งาน</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">ลูกค้าทั้งหมด: ${getActiveCustomers().length} รายการ</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">ชำระครบแล้ว: ${getCompletedCustomers().length} รายการ</p></div><div class="mt-6 p-4 rounded-lg border border-opacity-20" style="border-color: ${textColor};"><h3 class="font-bold mb-2">สิทธิ์การใช้งาน (${role})</h3>${permissionText}</div></div></div></div>`;
+    }
+
+    function renderModal(config, dark, surfaceColor, textColor, primaryColor) {
+      if (editingUser) {
+          const user = allRecords.find(r => r.id === editingUser);
+          if(!user) return '';
+          return `
+            <div class="modal-overlay">
+                <div class="modal-content" style="background: ${surfaceColor};">
+                    <h3 class="text-xl font-bold mb-4" style="color: ${textColor};">เปลี่ยนรหัสผ่าน: ${user.username}</h3>
+                    <form id="admin-reset-form" class="space-y-4">
+                        <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่านใหม่</label><input type="text" id="admin-new-pass" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+                        <div class="flex gap-4">
+                            <button type="submit" class="flex-1 py-2 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึก</button>
+                            <button type="button" onclick="hideModal()" class="flex-1 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ยกเลิก</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+          `;
+      }
+
+      if (editingCustomer) {
+        const customer = allRecords.find(r => r.id === editingCustomer);
+        if (!customer) return '';
+        return `<div class="modal-overlay"><div class="modal-content" style="background: ${surfaceColor};"><h3 class="text-xl font-bold mb-4" style="color: ${textColor};">แก้ไขข้อมูลลูกค้า</h3><form id="edit-customer-form" class="space-y-4"><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อลูกค้า</label><input type="text" id="edit-customer-name" value="${customer.customer_name}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">สินค้า</label><input type="text" id="edit-product" value="${customer.product}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ราคาสินค้า</label><input type="number" id="edit-product-price" value="${customer.product_price || ''}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+        <div>
+          <label class="block text-sm font-medium mb-2" style="color: ${textColor};">วันที่ทำสัญญา</label>
+          <input type="date" id="edit-contract-date" value="${customer.contract_date}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+        </div>
+        <div class="flex gap-4"><button type="submit" class="flex-1 py-2 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึก</button><button type="button" id="cancel-edit-btn" class="flex-1 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ยกเลิก</button></div>${confirmDeleteId === customer.id ? `<button type="button" id="confirm-delete-btn" class="w-full py-2 rounded-lg font-medium" style="background: #ef4444; color: white;">ยืนยันการลบ</button>` : `<button type="button" id="delete-customer-btn" class="w-full py-2 rounded-lg font-medium" style="background: #ef4444; color: white;">ลบข้อมูล</button>`}</form></div></div>`;
+      }
+      return '';
+    }
+
+    // Attach Event Listeners
+    function attachEventListeners() {
+      // Mobile Toggle
+      const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+      if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+      
+      const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+      if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleMobileSidebar);
+
+      const sidebarOverlay = document.getElementById('sidebar-overlay');
+      if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMobileSidebar);
+    
+      // Login
+      const loginBtn = document.getElementById('login-btn');
+      if (loginBtn) loginBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const u = document.getElementById('login-username').value;
+          const p = document.getElementById('login-password').value;
+          if(!u || !p) return showToast('กรุณากรอกข้อมูล', true);
+          loginBtn.innerHTML = '<div class="spinner"></div>';
+          if(!login(u,p)) { showToast('ข้อมูลไม่ถูกต้อง', true); loginBtn.innerHTML = 'เข้าสู่ระบบ'; }
+      });
+
+      // Login Enter Key Support
+      ['login-username', 'login-password'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+              el.addEventListener('keypress', (e) => {
+                  if (e.key === 'Enter') {
+                      document.getElementById('login-btn').click();
+                  }
+              });
+          }
+      });
+
+      // Guest
+      const guestBtn = document.getElementById('guest-continue-btn');
+      if(guestBtn) guestBtn.addEventListener('click', () => {
+          const users = allRecords.filter(r => r.type === 'user');
+          const list = document.getElementById('guest-user-list');
+          if(users.length === 0) return showToast("ไม่มีบัญชีผู้ใช้ให้ดู", true);
+          list.innerHTML = users.map(u => `<button class="w-full text-left px-4 py-3 rounded-lg border hover:bg-gray-50 flex justify-between items-center transition-all user-select-btn" data-uid="${u.id}" data-name="${u.username}" style="border-color: #d1d5db; color: #111827;"><span>${u.username}</span><span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">เลือกดู</span></button>`).join('');
+          document.getElementById('login-form').classList.add('hidden');
+          document.getElementById('guest-select-form').classList.remove('hidden');
+          document.querySelectorAll('.user-select-btn').forEach(btn => {
+              btn.addEventListener('click', () => {
+                  currentUser = { id: 'guest', username: `ผู้เยี่ยมชม (${btn.dataset.name})`, isGuestView: true, targetAccountId: btn.dataset.uid };
+                  currentView = 'manage';
+                  sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                  renderApp();
+              });
+          });
+      });
+
+      // Register/Reset Toggles
+      const toggle = (hideId, showId) => {
+          document.getElementById(hideId).classList.add('hidden');
+          document.getElementById(showId).classList.remove('hidden');
+      };
+      const regBtn = document.getElementById('show-register-btn');
+      if(regBtn) regBtn.addEventListener('click', () => { toggle('login-form', 'register-form'); document.getElementById('guest-select-form').classList.add('hidden'); });
+      const resetBtn = document.getElementById('show-reset-btn');
+      if(resetBtn) resetBtn.addEventListener('click', () => toggle('login-form', 'reset-form'));
+      const backBtns = document.querySelectorAll('[id^=back-from], [id^=back-to]');
+      backBtns.forEach(b => b.addEventListener('click', () => {
+          ['register-form', 'reset-form', 'guest-select-form'].forEach(id => document.getElementById(id).classList.add('hidden'));
+          document.getElementById('login-form').classList.remove('hidden');
+      }));
+
+      // Actions
+      const doRegister = document.getElementById('register-btn');
+      if(doRegister) doRegister.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const u = document.getElementById('register-username').value;
+          const p = document.getElementById('register-password').value;
+          if(!u || !p) return showToast('กรอกข้อมูลให้ครบ', true);
+          doRegister.innerHTML = '<div class="spinner"></div>';
+          if(await register(u,p)) toggle('register-form', 'login-form');
+          doRegister.innerHTML = 'ลงทะเบียน';
+      });
+
+      const doReset = document.getElementById('reset-btn');
+      if(doReset) doReset.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const u = document.getElementById('reset-username').value;
+          const k = document.getElementById('reset-admin').value;
+          const p = document.getElementById('reset-newpassword').value;
+          if(!u||!k||!p) return showToast('กรอกข้อมูลให้ครบ', true);
+          doReset.innerHTML = '<div class="spinner"></div>';
+          if(await resetPassword(u,k,p)) toggle('reset-form', 'login-form');
+          doReset.innerHTML = 'รีเซ็ตรหัสผ่าน';
+      });
+
+      const logoutBtn = document.getElementById('logout-btn');
+      if(logoutBtn) logoutBtn.addEventListener('click', logout);
+
+      // Nav - Auto close on mobile
+      document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', (e) => { 
+          currentView = e.currentTarget.dataset.view; 
+          isMobileSidebarOpen = false; // Close menu on selection
+          renderApp(); 
+      }));
+
+      // Add Form
+      const addForm = document.getElementById('add-customer-form');
+      if(addForm) {
+          const updateCalc = () => {
+              const name = document.getElementById('customer-name').value.trim();
+              const product = document.getElementById('product').value.trim();
+              const p = parseFloat(document.getElementById('product-price').value);
+              const r = parseFloat(document.getElementById('interest-rate').value);
+              const n = parseInt(document.getElementById('installments').value);
+              const fStr = document.getElementById('bill-fee').value;
+              const f = parseFloat(fStr);
+
+              // Check if all required fields are valid and filled
+              const isValid = name && product && !isNaN(p) && p > 0 && 
+                              !isNaN(r) && !isNaN(n) && n > 0 && 
+                              fStr !== '' && !isNaN(f);
+
+              const display = document.getElementById('bill-amount-display');
+              const input = document.getElementById('bill-amount-input');
+              const detailsDiv = document.getElementById('calculation-details');
+
+              if (isValid) {
+                  const m = Math.round((p * (1 + (r/100*n))) / n) + f;
+                  
+                  if(display) display.value = '฿' + m.toLocaleString();
+                  if(input) input.value = m;
+
+                  if (detailsDiv) {
+                      detailsDiv.classList.remove('hidden');
+                      const totalInterest = p * (r/100) * n;
+                      const grandTotal = p + totalInterest + (f * n);
+                      
+                      document.getElementById('detail-principal').textContent = '฿' + p.toLocaleString();
+                      document.getElementById('detail-interest').textContent = '฿' + totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                      document.getElementById('detail-total').textContent = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                  }
+                  
+                  // Draft
+                  const draft = {
+                      customerName: name,
+                      product: product,
+                      productPrice: p, interestRate: r, installments: n, billFee: f,
+                      contractDate: document.getElementById('contract-date').value,
+                      billAmountInput: m
+                  };
+                  localStorage.setItem('add_customer_draft', JSON.stringify(draft));
+              } else {
+                  // Clear or hide values if not valid
+                  if(display) display.value = '';
+                  if(input) input.value = '';
+                  if(detailsDiv) detailsDiv.classList.add('hidden');
+              }
+          };
+          addForm.addEventListener('input', updateCalc);
+          
+          addForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const btn = document.getElementById('save-customer-btn');
+              btn.disabled=true; btn.innerHTML='<div class="spinner"></div>';
+              await addCustomer({
+                  customerName: document.getElementById('customer-name').value,
+                  product: document.getElementById('product').value,
+                  productPrice: parseFloat(document.getElementById('product-price').value),
+                  interestRate: parseFloat(document.getElementById('interest-rate').value),
+                  installments: parseInt(document.getElementById('installments').value),
+                  billAmount: document.getElementById('bill-amount-input').value,
+                  billFee: parseFloat(document.getElementById('bill-fee').value)||0,
+                  contractDate: document.getElementById('contract-date').value
+              });
+              btn.disabled=false; btn.innerHTML='บันทึกข้อมูลลูกค้า';
+          });
+      }
+
+      // Action Buttons
+      document.querySelectorAll('[data-pay]').forEach(b => b.addEventListener('click', async (e) => {
+          const id = e.currentTarget.dataset.pay;
+          e.currentTarget.innerHTML = '<div class="spinner" style="width:12px;height:12px;"></div>';
+          await makePayment(id);
+      }));
+      document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', (e) => {
+          editingCustomer = e.currentTarget.dataset.edit;
+          renderApp();
+      }));
+
+      // Search Logic Listeners
+      const searchInput = document.getElementById('manage-search-input');
+      if(searchInput) {
+          searchInput.addEventListener('input', (e) => {
+              manageSearchTerm = e.target.value;
+              // Simple debouncing is ideal but direct render is fast enough here
+              renderApp();
+              // Re-focus the input after render since re-render kills focus
+              setTimeout(() => {
+                  const input = document.getElementById('manage-search-input');
+                  if(input) {
+                      input.focus();
+                      // Move cursor to end
+                      const val = input.value;
+                      input.value = '';
+                      input.value = val;
+                  }
+              }, 0);
+          });
+      }
+      
+      const clearSearchBtn = document.getElementById('manage-search-clear');
+      if(clearSearchBtn) {
+          clearSearchBtn.addEventListener('click', () => {
+              manageSearchTerm = '';
+              renderApp();
+          });
+      }
+
+      // Admin Manage User Buttons
+      document.querySelectorAll('[data-delete-user]').forEach(b => b.addEventListener('click', (e) => {
+          if(confirm('คุณต้องการลบบัญชีนี้ใช่หรือไม่?')) deleteUser(e.currentTarget.dataset.deleteUser);
+      }));
+      document.querySelectorAll('[data-reset-user]').forEach(b => b.addEventListener('click', (e) => {
+          editingUser = e.currentTarget.dataset.resetUser;
+          renderApp();
+      }));
+
+      // Edit Form
+      const editForm = document.getElementById('edit-customer-form');
+      if(editForm) {
+          editForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              await updateCustomer(editingCustomer, {
+                  customer_name: document.getElementById('edit-customer-name').value,
+                  product: document.getElementById('edit-product').value,
+                  product_price: parseFloat(document.getElementById('edit-product-price').value),
+                  contract_date: document.getElementById('edit-contract-date').value
+              });
+          });
+          document.getElementById('cancel-edit-btn').addEventListener('click', hideModal);
+          
+          // Updated Delete Logic with Confirmation
+          document.getElementById('delete-customer-btn')?.addEventListener('click', async () => { 
+              if(confirm('คุณต้องการลบข้อมูลลูกค้านี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+                  await deleteCustomer(editingCustomer);
+                  hideModal();
+              }
+          });
+          
+          document.getElementById('confirm-delete-btn')?.addEventListener('click', async () => { await deleteCustomer(confirmDeleteId); hideModal(); });
+      }
+
+      // Admin Reset Form
+      const adminResetForm = document.getElementById('admin-reset-form');
+      if(adminResetForm) {
+          adminResetForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const newPass = document.getElementById('admin-new-pass').value;
+              if(!newPass) return showToast('กรุณากรอกรหัสผ่าน', true);
+              await adminResetPassword(editingUser, newPass);
+          });
+      }
+
+      // Settings
+      const dm = document.getElementById('dark-mode-toggle');
+      if(dm) dm.addEventListener('change', (e) => { if(e.target.checked) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); });
+      const saveSet = document.getElementById('save-settings-btn');
+      if(saveSet) saveSet.addEventListener('click', async () => {
+          saveSet.innerHTML = '<div class="spinner"></div>';
+          const perms = [];
+          ['add','manage','history','changelog','settings','edit'].forEach(p => { if(document.getElementById(`guest-${p}`)?.checked) perms.push(p); });
+          await saveSettings(dm.checked, parseInt(document.getElementById('payment-days-before').value), perms.join(','));
+          saveSet.innerHTML = 'บันทึกการตั้งค่า';
+      });
+
+      // Admin Connection Settings Save
+      const saveConn = document.getElementById('save-connection-btn');
+      if(saveConn) saveConn.addEventListener('click', () => {
+          const url = document.getElementById('setting-supabase-url').value;
+          const key = document.getElementById('setting-supabase-key').value;
+          if(!url || !key) return showToast('กรุณากรอกข้อมูลให้ครบถ้วน', true);
+          
+          localStorage.setItem('app_supabase_config', JSON.stringify({ url, key }));
+          showToast('บันทึกค่าเชื่อมต่อเรียบร้อย ระบบจะรีโหลด...');
+          setTimeout(() => location.reload(), 1500);
+      });
+
+      // Admin Connection Settings Reset
+      const resetConn = document.getElementById('reset-connection-btn');
+      if(resetConn) resetConn.addEventListener('click', () => {
+          if(confirm('คุณต้องการรีเซ็ตค่าการเชื่อมต่อเป็นค่าเริ่มต้นหรือไม่?')) {
+              localStorage.removeItem('app_supabase_config');
+              showToast('รีเซ็ตค่าเรียบร้อย ระบบจะรีโหลด...');
+              setTimeout(() => location.reload(), 1500);
+          }
+      });
+    }
+
+    // Init
+    async function init() {
+      window.dataSdk.init(dataHandler); 
+      checkLogin();
+      window.elementSdk.init({ defaultConfig, onConfigChange: () => renderApp() });
+      renderApp();
+    }
+
+    init();
+  </script>
+ </body>
+</html>
