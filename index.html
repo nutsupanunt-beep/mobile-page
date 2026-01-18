@@ -557,7 +557,7 @@
           <div class="w-full max-w-md p-8 rounded-xl shadow-lg" style="background: ${surfaceColor};">
             <div class="flex flex-col items-center mb-6">
                 <!-- Large Logo, Removed Text Title -->
-                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[250px] h-[250px] mb-4 object-contain">
+                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[350px] h-[350px] mb-4 object-contain">
             </div>
             <div id="login-form" class="space-y-4">
               <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="login-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
@@ -610,7 +610,7 @@
         <div class="${baseClasses} ${mobileClasses} ${desktopClasses}" style="background: ${surfaceColor};">
           <div class="mb-4 flex flex-col items-center">
             <!-- Sidebar Logo Expanded -->
-            <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[60px] h-[60px] mb-2 object-contain">
+            <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[200px] h-[200px] mb-2 object-contain">
             <div class="flex justify-between w-full items-start absolute top-4 right-4">
                 <button id="close-sidebar-btn" class="md:hidden text-gray-500 hover:text-gray-700">✖</button>
             </div>
@@ -626,7 +626,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.3.8 (Logo Resizing)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.3.9 (Logo Max Size)</p>
           </div>
         </div>
       `;
@@ -742,6 +742,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.3.9 (Logo Max Size)", date: "18/01/2026", changes: ["ขยายขนาดโลโก้หน้า Login เป็น 350px", "ขยายขนาดโลโก้แถบเมนูข้างเป็น 200px"] },
         { version: "V.3.8 (Logo Resizing)", date: "18/01/2026", changes: ["ปรับขนาดโลโก้หน้า Login เป็น 250px", "ปรับขนาดโลโก้แถบเมนูเป็น 60px"] },
         { version: "V.3.7 (Favicon Update)", date: "18/01/2026", changes: ["เปลี่ยนไอคอนของระบบ (Favicon) เป็นไฟล์ .ico"] },
         { version: "V.3.6 (Light Login)", date: "18/01/2026", changes: ["ปรับหน้า Login ให้แสดงผลเป็นโหมดปกติ (Light Mode) เสมอ", "แก้ไขค่าเริ่มต้นเป็นโหมดปกติ"] },
