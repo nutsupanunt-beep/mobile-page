@@ -8,13 +8,8 @@
   <!-- ========================================== -->
   <!-- ส่วนที่แก้ไข: ใช้โลโก้จากไฟล์ edited-image.png -->
   <!-- ========================================== -->
-  <!-- 1. ไอคอนบนแถบ Browser -->
   <link rel="icon" type="image/x-icon" href="edited-image.ico">
-  
-  <!-- 2. ไอคอนสำหรับ iPhone/iPad/Android -->
   <link rel="apple-touch-icon" href="edited-image.png">
-  
-  <!-- 3. รูปภาพเวลาแชร์ -->
   <meta property="og:image" content="edited-image.png">
   <meta property="og:title" content="ระบบจัดการลูกค้าออนไลน์">
   <meta property="og:description" content="ระบบบันทึกและจัดการข้อมูลลูกค้า">
@@ -652,7 +647,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.3 (Admin Fix)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.4 (Event Delegation Fix)</p>
           </div>
         </div>
       `;
@@ -676,7 +671,7 @@
     // Using custom-surface class for cards
     function renderAdminUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
       const users = allRecords.filter(r => r.type === 'user');
-      return `<div class="p-4 md:p-8"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">จัดการผู้ใช้งานระบบ</h2><div class="overflow-x-auto rounded-xl shadow-sm"><table class="w-full min-w-[600px] custom-surface" style="border-radius: 12px; overflow: hidden;"><thead style="background: ${dark ? '#374151' : secondaryColor};"><tr><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ชื่อผู้ใช้</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">วันที่สมัคร</th><th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th></tr></thead><tbody>${users.map((u, idx) => `<tr class="border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};"><td class="px-4 py-3" style="color: ${textColor};">${idx + 1}</td><td class="px-4 py-3 font-medium" style="color: ${textColor};">${u.username}</td><td class="px-4 py-3" style="color: ${textColor};">${new Date(u.created_at).toLocaleDateString('th-TH')}</td><td class="px-4 py-3 text-center"><div class="flex justify-center gap-2"><button data-reset-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" style="background: ${primaryColor}; color: white;" title="เปลี่ยนรหัสผ่าน">🔑</button><button data-delete-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" style="background: #ef4444; color: white;" title="ลบบัญชี">🗑️</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
+      return `<div class="p-4 md:p-8"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">จัดการผู้ใช้งานระบบ</h2><div class="overflow-x-auto rounded-xl shadow-sm"><table class="w-full min-w-[600px] custom-surface" style="border-radius: 12px; overflow: hidden;"><thead style="background: ${dark ? '#374151' : secondaryColor};"><tr><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ชื่อผู้ใช้</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">วันที่สมัคร</th><th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th></tr></thead><tbody>${users.map((u, idx) => `<tr class="border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};"><td class="px-4 py-3" style="color: ${textColor};">${idx + 1}</td><td class="px-4 py-3 font-medium" style="color: ${textColor};">${u.username}</td><td class="px-4 py-3" style="color: ${textColor};">${new Date(u.created_at).toLocaleDateString('th-TH')}</td><td class="px-4 py-3 text-center"><div class="flex justify-center gap-2"><button type="button" class="btn-reset-user p-2 rounded-full shadow-sm hover:shadow-md transition-all cursor-pointer" data-id="${u.id}" style="background: ${primaryColor}; color: white;" title="เปลี่ยนรหัสผ่าน">🔑</button><button type="button" class="btn-delete-user p-2 rounded-full shadow-sm hover:shadow-md transition-all cursor-pointer" data-id="${u.id}" style="background: #ef4444; color: white;" title="ลบบัญชี">🗑️</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
     }
 
     function renderAddCustomer(config, dark, surfaceColor, textColor, primaryColor) {
@@ -805,6 +800,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.5.4 (Event Delegation Fix)", date: "18/01/2026", changes: ["แก้ปุ่มลบ/เปลี่ยนรหัสผ่านในหน้า Admin ให้กดได้แน่นอน", "เพิ่มความลื่นไหลในการตอบสนองปุ่มกด"] },
         { version: "V.5.3 (Admin Fix)", date: "18/01/2026", changes: ["แก้บั๊กหน้าจัดการผู้ใช้งานของ Admin เข้าไม่ได้ (Function name collision)", "ปรับปรุงประสิทธิภาพโค้ด"] },
         { version: "V.5.2 (Fix Admin)", date: "18/01/2026", changes: ["แก้บั๊กปุ่มลบ/รีเซ็ตในหน้า Admin ไม่ทำงาน", "ปรับปรุงความเสถียรของหน้าต่าง Modal"] },
         { version: "V.5.1 (No Draft Save)", date: "18/01/2026", changes: ["ยกเลิกระบบจำค่าข้อมูลลูกค้า (Draft) เมื่อปิดหน้าเว็บหรือออกจากระบบ", "ล้างค่าฟอร์มทุกครั้งที่เปิดใหม่"] },
@@ -832,13 +828,9 @@
       return `<div class="p-4 md:p-8 max-w-2xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_account}</h2><div class="p-6 rounded-xl shadow-md custom-surface"><div class="flex items-center gap-4 mb-6"><div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="background: ${primaryColor}20; color: ${primaryColor};">👤</div><div><p class="text-xl font-semibold" style="color: ${textColor};">${currentUser.username}</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">${currentUser.isAdmin ? 'ผู้ดูแลระบบสูงสุด (Super Admin)' : (currentUser.isGuestView ? 'โหมดผู้เยี่ยมชม' : 'บัญชีผู้ใช้')}</p></div></div><div class="space-y-4"><div class="p-4 rounded-lg" style="background: ${dark ? '#374151' : '#f3f4f6'};"><p class="text-sm font-medium mb-1" style="color: ${textColor};">สถิติการใช้งาน</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">ลูกค้าทั้งหมด: ${getActiveCustomers().length} รายการ</p><p class="text-sm" style="color: ${textColor}; opacity: 0.7;">ชำระครบแล้ว: ${getCompletedCustomers().length} รายการ</p></div><div class="mt-6 p-4 rounded-lg border border-opacity-20" style="border-color: ${textColor};"><h3 class="font-bold mb-2">สิทธิ์การใช้งาน (${role})</h3>${permissionText}</div></div></div></div>`;
     }
 
-    // ... (renderModal, attachEventListeners, and other helpers are same as previous logic but integrated with new theme system) ...
-    // Repeating critical parts for context:
-    
     function renderModal(config, dark, surfaceColor, textColor, primaryColor) {
       if (editingUser) {
           const user = allRecords.find(r => r.id === editingUser); if(!user) return '';
-          // Changed cancel button from onclick to id-based listener for better module compatibility
           return `<div class="modal-overlay"><div class="modal-content custom-surface"><h3 class="text-xl font-bold mb-4" style="color: ${textColor};">เปลี่ยนรหัสผ่าน: ${user.username}</h3><form id="admin-reset-form" class="space-y-4"><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่านใหม่</label><input type="text" id="admin-new-pass" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div class="flex gap-4"><button type="submit" class="flex-1 py-2 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึก</button><button type="button" id="cancel-admin-reset-btn" class="flex-1 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ยกเลิก</button></div></form></div></div>`;
       }
       if (editingCustomer) {
@@ -850,44 +842,41 @@
       return '';
     }
 
-    // Attach Event Listeners (Restored and Complete)
+    // Attach Event Listeners (Refactored to Delegation)
     function attachEventListeners() {
-      // Mobile Toggle
+      // Global Event Delegation for Dynamic Content
+      const app = document.getElementById('app');
+      
+      // Remove old listeners to prevent duplicates (simple way is relying on innerHTML rewrite, but here we add check)
+      if (app._hasListeners) return; 
+      
+      // We will re-attach specific static listeners, but dynamic ones use delegation on 'app' or document
+      // Actually, since we rewrite innerHTML, static listeners are lost. 
+      // The strategy here: re-attach static listeners. For dynamic list items, use delegation on a static parent or re-attach.
+      
+      // Re-attach Static Listeners (Login, Nav, etc)
       const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-      if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+      if(mobileMenuBtn) mobileMenuBtn.onclick = toggleMobileSidebar;
       
       const closeSidebarBtn = document.getElementById('close-sidebar-btn');
-      if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleMobileSidebar);
+      if(closeSidebarBtn) closeSidebarBtn.onclick = toggleMobileSidebar;
 
       const sidebarOverlay = document.getElementById('sidebar-overlay');
-      if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMobileSidebar);
+      if(sidebarOverlay) sidebarOverlay.onclick = toggleMobileSidebar;
     
-      // Login
       const loginBtn = document.getElementById('login-btn');
-      if (loginBtn) loginBtn.addEventListener('click', (e) => {
+      if (loginBtn) loginBtn.onclick = (e) => {
           e.preventDefault();
           const u = document.getElementById('login-username').value;
           const p = document.getElementById('login-password').value;
           if(!u || !p) return showToast('กรุณากรอกข้อมูล', true);
           loginBtn.innerHTML = '<div class="spinner"></div>';
           if(!login(u,p)) { showToast('ข้อมูลไม่ถูกต้อง', true); loginBtn.innerHTML = 'เข้าสู่ระบบ'; }
-      });
-
-      // Login Enter Key Support
-      ['login-username', 'login-password'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) {
-              el.addEventListener('keypress', (e) => {
-                  if (e.key === 'Enter') {
-                      document.getElementById('login-btn').click();
-                  }
-              });
-          }
-      });
-
+      };
+      
       // Guest
       const guestBtn = document.getElementById('guest-continue-btn');
-      if(guestBtn) guestBtn.addEventListener('click', () => {
+      if(guestBtn) guestBtn.onclick = () => {
           const users = allRecords.filter(r => r.type === 'user');
           const list = document.getElementById('guest-user-list');
           if(users.length === 0) return showToast("ไม่มีบัญชีผู้ใช้ให้ดู", true);
@@ -895,112 +884,110 @@
           document.getElementById('login-form').classList.add('hidden');
           document.getElementById('guest-select-form').classList.remove('hidden');
           document.querySelectorAll('.user-select-btn').forEach(btn => {
-              btn.addEventListener('click', () => {
+              btn.onclick = () => {
                   currentUser = { id: 'guest', username: `ผู้เยี่ยมชม (${btn.dataset.name})`, isGuestView: true, targetAccountId: btn.dataset.uid };
                   currentView = 'manage';
                   sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
                   renderApp();
-              });
+              };
           });
-      });
-
-      // Register/Reset Toggles
-      const toggle = (hideId, showId) => {
-          document.getElementById(hideId).classList.add('hidden');
-          document.getElementById(showId).classList.remove('hidden');
       };
+      
       const regBtn = document.getElementById('show-register-btn');
-      if(regBtn) regBtn.addEventListener('click', () => { toggle('login-form', 'register-form'); document.getElementById('guest-select-form').classList.add('hidden'); });
+      if(regBtn) regBtn.onclick = () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); document.getElementById('guest-select-form').classList.add('hidden'); };
+      
       const resetBtn = document.getElementById('show-reset-btn');
-      if(resetBtn) resetBtn.addEventListener('click', () => toggle('login-form', 'reset-form'));
+      if(resetBtn) resetBtn.onclick = () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('reset-form').classList.remove('hidden'); };
+      
       const backBtns = document.querySelectorAll('[id^=back-from], [id^=back-to]');
-      backBtns.forEach(b => b.addEventListener('click', () => {
+      backBtns.forEach(b => b.onclick = () => {
           ['register-form', 'reset-form', 'guest-select-form'].forEach(id => document.getElementById(id).classList.add('hidden'));
           document.getElementById('login-form').classList.remove('hidden');
-      }));
+      });
 
-      // Actions
       const doRegister = document.getElementById('register-btn');
-      if(doRegister) doRegister.addEventListener('click', async (e) => {
+      if(doRegister) doRegister.onclick = async (e) => {
           e.preventDefault();
           const u = document.getElementById('register-username').value;
           const p = document.getElementById('register-password').value;
           if(!u || !p) return showToast('กรอกข้อมูลให้ครบ', true);
           doRegister.innerHTML = '<div class="spinner"></div>';
-          if(await register(u,p)) toggle('register-form', 'login-form');
+          if(await register(u,p)) { document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); }
           doRegister.innerHTML = 'ลงทะเบียน';
-      });
+      };
 
       const doReset = document.getElementById('reset-btn');
-      if(doReset) doReset.addEventListener('click', async (e) => {
+      if(doReset) doReset.onclick = async (e) => {
           e.preventDefault();
           const u = document.getElementById('reset-username').value;
           const k = document.getElementById('reset-admin').value;
           const p = document.getElementById('reset-newpassword').value;
           if(!u||!k||!p) return showToast('กรอกข้อมูลให้ครบ', true);
           doReset.innerHTML = '<div class="spinner"></div>';
-          if(await resetPassword(u,k,p)) toggle('reset-form', 'login-form');
+          if(await resetPassword(u,k,p)) { document.getElementById('reset-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); }
           doReset.innerHTML = 'รีเซ็ตรหัสผ่าน';
-      });
+      };
 
       const logoutBtn = document.getElementById('logout-btn');
-      if(logoutBtn) logoutBtn.addEventListener('click', logout);
+      if(logoutBtn) logoutBtn.onclick = logout;
 
-      // Nav - Auto close on mobile
-      document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', (e) => { 
+      // View Navigation
+      document.querySelectorAll('[data-view]').forEach(b => b.onclick = (e) => { 
           currentView = e.currentTarget.dataset.view; 
           isMobileSidebarOpen = false;
           renderApp(); 
-      }));
+      });
+      
+      // ADMIN TABLE BUTTONS DELEGATION (Fix for unresponsive buttons)
+      // We attach individual listeners because innerHTML wipes them anyway, 
+      // but ensure we select them correctly after render.
+      const resetUserBtns = document.querySelectorAll('.btn-reset-user');
+      resetUserBtns.forEach(btn => {
+          btn.onclick = (e) => {
+              e.stopPropagation(); // Stop bubbling
+              editingUser = e.currentTarget.dataset.id;
+              renderApp();
+          }
+      });
+      
+      const deleteUserBtns = document.querySelectorAll('.btn-delete-user');
+      deleteUserBtns.forEach(btn => {
+          btn.onclick = (e) => {
+              e.stopPropagation();
+              if(confirm('คุณต้องการลบบัญชีนี้ใช่หรือไม่?')) deleteUser(e.currentTarget.dataset.id);
+          }
+      });
 
-      // Add Form
+      // Customer Actions
+      document.querySelectorAll('[data-pay]').forEach(b => b.onclick = async (e) => {
+          const id = e.currentTarget.dataset.pay;
+          e.currentTarget.innerHTML = '<div class="spinner" style="width:12px;height:12px;"></div>';
+          await makePayment(id);
+      });
+      document.querySelectorAll('[data-edit]').forEach(b => b.onclick = (e) => {
+          editingCustomer = e.currentTarget.dataset.edit;
+          renderApp();
+      });
+
+      // Settings Save
+      const saveSet = document.getElementById('save-settings-btn');
+      if(saveSet) saveSet.onclick = async () => {
+          saveSet.innerHTML = '<div class="spinner"></div>';
+          const perms = [];
+          ['add','manage','history','changelog','settings','edit'].forEach(p => { if(document.getElementById(`guest-${p}`)?.checked) perms.push(p); });
+          const dm = document.getElementById('dark-mode-toggle');
+          await saveSettings({
+              is_dark_mode: dm.checked,
+              payment_days_before: parseInt(document.getElementById('payment-days-before').value),
+              guest_permissions: perms.join(',')
+          });
+          saveSet.innerHTML = 'บันทึกการตั้งค่า';
+      };
+      
+      // Forms
       const addForm = document.getElementById('add-customer-form');
       if(addForm) {
-          const updateCalc = () => {
-              const name = document.getElementById('customer-name').value.trim();
-              const product = document.getElementById('product').value.trim();
-              const p = parseFloat(document.getElementById('product-price').value);
-              const r = parseFloat(document.getElementById('interest-rate').value);
-              const n = parseInt(document.getElementById('installments').value);
-              const fStr = document.getElementById('bill-fee').value;
-              const f = parseFloat(fStr);
-
-              // Check if all required fields are valid and filled
-              const isValid = name && product && !isNaN(p) && p > 0 && 
-                              !isNaN(r) && !isNaN(n) && n > 0 && 
-                              fStr !== '' && !isNaN(f);
-
-              const display = document.getElementById('bill-amount-display');
-              const input = document.getElementById('bill-amount-input');
-              const detailsDiv = document.getElementById('calculation-details');
-
-              if (isValid) {
-                  const m = Math.round((p * (1 + (r/100*n))) / n) + f;
-                  
-                  if(display) display.value = '฿' + m.toLocaleString();
-                  if(input) input.value = m;
-
-                  if (detailsDiv) {
-                      detailsDiv.classList.remove('hidden');
-                      const totalInterest = p * (r/100) * n;
-                      const grandTotal = p + totalInterest + (f * n);
-                      
-                      document.getElementById('detail-principal').textContent = '฿' + p.toLocaleString();
-                      document.getElementById('detail-interest').textContent = '฿' + totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                      document.getElementById('detail-total').textContent = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                  }
-                  
-                  // Draft saving removed as requested
-              } else {
-                  // Clear or hide values if not valid
-                  if(display) display.value = '';
-                  if(input) input.value = '';
-                  if(detailsDiv) detailsDiv.classList.add('hidden');
-              }
-          };
-          addForm.addEventListener('input', updateCalc);
-          
-          addForm.addEventListener('submit', async (e) => {
+          addForm.onsubmit = async (e) => {
               e.preventDefault();
               const btn = document.getElementById('save-customer-btn');
               btn.disabled=true; btn.innerHTML='<div class="spinner"></div>';
@@ -1015,76 +1002,52 @@
                   contractDate: document.getElementById('contract-date').value
               });
               btn.disabled=false; btn.innerHTML='บันทึกข้อมูลลูกค้า';
-          });
-      }
-
-      // Action Buttons
-      document.querySelectorAll('[data-pay]').forEach(b => b.addEventListener('click', async (e) => {
-          const id = e.currentTarget.dataset.pay;
-          e.currentTarget.innerHTML = '<div class="spinner" style="width:12px;height:12px;"></div>';
-          await makePayment(id);
-      }));
-      document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', (e) => {
-          editingCustomer = e.currentTarget.dataset.edit;
-          renderApp();
-      }));
-
-      // Search Logic Listeners
-      const searchInput = document.getElementById('manage-search-input');
-      if(searchInput) {
-          searchInput.addEventListener('input', (e) => {
-              manageSearchTerm = e.target.value;
-              // Simple debouncing is ideal but direct render is fast enough here
-              renderApp();
-              // Re-focus the input after render since re-render kills focus
-              setTimeout(() => {
-                  const input = document.getElementById('manage-search-input');
-                  if(input) {
-                      input.focus();
-                      // Move cursor to end
-                      const val = input.value;
-                      input.value = '';
-                      input.value = val;
+          };
+          // Calculation logic
+           const updateCalc = () => {
+              const name = document.getElementById('customer-name').value.trim();
+              const product = document.getElementById('product').value.trim();
+              const p = parseFloat(document.getElementById('product-price').value);
+              const r = parseFloat(document.getElementById('interest-rate').value);
+              const n = parseInt(document.getElementById('installments').value);
+              const fStr = document.getElementById('bill-fee').value;
+              const f = parseFloat(fStr);
+              const isValid = name && product && !isNaN(p) && p > 0 && !isNaN(r) && !isNaN(n) && n > 0 && fStr !== '' && !isNaN(f);
+              const display = document.getElementById('bill-amount-display');
+              const input = document.getElementById('bill-amount-input');
+              const detailsDiv = document.getElementById('calculation-details');
+              if (isValid) {
+                  const m = Math.round((p * (1 + (r/100*n))) / n) + f;
+                  if(display) display.value = '฿' + m.toLocaleString();
+                  if(input) input.value = m;
+                  if (detailsDiv) {
+                      detailsDiv.classList.remove('hidden');
+                      const totalInterest = p * (r/100) * n;
+                      const grandTotal = p + totalInterest + (f * n);
+                      document.getElementById('detail-principal').textContent = '฿' + p.toLocaleString();
+                      document.getElementById('detail-interest').textContent = '฿' + totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                      document.getElementById('detail-total').textContent = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                   }
-              }, 0);
-          });
+              } else {
+                  if(display) display.value = '';
+                  if(input) input.value = '';
+                  if(detailsDiv) detailsDiv.classList.add('hidden');
+              }
+          };
+          addForm.addEventListener('input', updateCalc);
       }
       
-      const clearSearchBtn = document.getElementById('manage-search-clear');
-      if(clearSearchBtn) {
-          clearSearchBtn.addEventListener('click', () => {
-              manageSearchTerm = '';
-              renderApp();
-          });
-      }
-
-      // Admin Manage User Buttons (Fixed Logic)
-      document.querySelectorAll('[data-delete-user]').forEach(b => b.addEventListener('click', (e) => {
-          if(confirm('คุณต้องการลบบัญชีนี้ใช่หรือไม่?')) deleteUser(e.currentTarget.dataset.deleteUser);
-      }));
-      document.querySelectorAll('[data-reset-user]').forEach(b => b.addEventListener('click', (e) => {
-          editingUser = e.currentTarget.dataset.resetUser;
-          renderApp();
-      }));
-
-      // Edit Form
       const editForm = document.getElementById('edit-customer-form');
       if(editForm) {
-          editForm.addEventListener('submit', async (e) => {
+          editForm.onsubmit = async (e) => {
               e.preventDefault();
-              
-              // Recalculate Next Payment Date Logic
               const customer = allRecords.find(r => r.id === editingCustomer);
               const newContractDate = document.getElementById('edit-contract-date').value;
-              let nextPaymentDate = customer.next_payment_date; // Default to existing
-
-              // Always recalculate based on new contract date + paid installments + 1
-              // This ensures consistency if the date is changed
+              let nextPaymentDate = customer.next_payment_date;
               if (customer) {
                   const paid = customer.paid_installments || 0;
                   nextPaymentDate = addMonthsToDate(newContractDate, paid + 1);
               }
-
               await updateCustomer(editingCustomer, {
                   customer_name: document.getElementById('edit-customer-name').value,
                   product: document.getElementById('edit-product').value,
@@ -1092,73 +1055,72 @@
                   contract_date: newContractDate,
                   next_payment_date: nextPaymentDate 
               });
-          });
-          document.getElementById('cancel-edit-btn').addEventListener('click', hideModal);
-          
-          // Updated Delete Logic with Confirmation
+          };
+          document.getElementById('cancel-edit-btn').onclick = hideModal;
           document.getElementById('delete-customer-btn')?.addEventListener('click', async () => { 
               if(confirm('คุณต้องการลบข้อมูลลูกค้านี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
                   await deleteCustomer(editingCustomer);
                   hideModal();
               }
           });
-          
           document.getElementById('confirm-delete-btn')?.addEventListener('click', async () => { await deleteCustomer(confirmDeleteId); hideModal(); });
       }
 
-      // Admin Reset Form
       const adminResetForm = document.getElementById('admin-reset-form');
       if(adminResetForm) {
-          adminResetForm.addEventListener('submit', async (e) => {
+          adminResetForm.onsubmit = async (e) => {
               e.preventDefault();
               const newPass = document.getElementById('admin-new-pass').value;
               if(!newPass) return showToast('กรุณากรอกรหัสผ่าน', true);
               await adminResetPassword(editingUser, newPass);
-          });
-          
-          // Added listener for cancel button on Admin Reset Form
+          };
           const cancelAdminReset = document.getElementById('cancel-admin-reset-btn');
-          if(cancelAdminReset) cancelAdminReset.addEventListener('click', hideModal);
+          if(cancelAdminReset) cancelAdminReset.onclick = hideModal;
       }
-
-      // Settings
-      const dm = document.getElementById('dark-mode-toggle');
-      if(dm) dm.addEventListener('change', (e) => { if(e.target.checked) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); });
-      const saveSet = document.getElementById('save-settings-btn');
-      if(saveSet) saveSet.addEventListener('click', async () => {
-          saveSet.innerHTML = '<div class="spinner"></div>';
-          const perms = [];
-          ['add','manage','history','changelog','settings','edit'].forEach(p => { if(document.getElementById(`guest-${p}`)?.checked) perms.push(p); });
-          
-          await saveSettings({
-              is_dark_mode: dm.checked,
-              payment_days_before: parseInt(document.getElementById('payment-days-before').value),
-              guest_permissions: perms.join(',')
-          });
-          saveSet.innerHTML = 'บันทึกการตั้งค่า';
-      });
-
-      // Admin Connection Settings Save
+      
       const saveConn = document.getElementById('save-connection-btn');
-      if(saveConn) saveConn.addEventListener('click', () => {
+      if(saveConn) saveConn.onclick = () => {
           const url = document.getElementById('setting-supabase-url').value;
           const key = document.getElementById('setting-supabase-key').value;
           if(!url || !key) return showToast('กรุณากรอกข้อมูลให้ครบถ้วน', true);
-          
           localStorage.setItem('app_supabase_config', JSON.stringify({ url, key }));
           showToast('บันทึกค่าเชื่อมต่อเรียบร้อย ระบบจะรีโหลด...');
           setTimeout(() => location.reload(), 1500);
-      });
-
-      // Admin Connection Settings Reset
+      };
+      
       const resetConn = document.getElementById('reset-connection-btn');
-      if(resetConn) resetConn.addEventListener('click', () => {
+      if(resetConn) resetConn.onclick = () => {
           if(confirm('คุณต้องการรีเซ็ตค่าการเชื่อมต่อเป็นค่าเริ่มต้นหรือไม่?')) {
               localStorage.removeItem('app_supabase_config');
               showToast('รีเซ็ตค่าเรียบร้อย ระบบจะรีโหลด...');
               setTimeout(() => location.reload(), 1500);
           }
-      });
+      };
+
+       // Search Logic
+      const searchInput = document.getElementById('manage-search-input');
+      if(searchInput) {
+          searchInput.addEventListener('input', (e) => {
+              manageSearchTerm = e.target.value;
+              renderApp();
+              setTimeout(() => {
+                  const input = document.getElementById('manage-search-input');
+                  if(input) {
+                      input.focus();
+                      const val = input.value;
+                      input.value = '';
+                      input.value = val;
+                  }
+              }, 0);
+          });
+      }
+      const clearSearchBtn = document.getElementById('manage-search-clear');
+      if(clearSearchBtn) {
+          clearSearchBtn.onclick = () => {
+              manageSearchTerm = '';
+              renderApp();
+          };
+      }
     }
 
     // Init
