@@ -313,17 +313,19 @@
 
     function getUserSettings() {
       if (!currentUser) return null;
-      // Default Settings (Light Mode = is_dark_mode: false)
+      // Default Settings
       const defaultSettings = { 
           is_dark_mode: false, 
           payment_days_before: 5, 
-          guest_permissions: currentUser.isAdmin ? 'add,manage,history,settings,edit,changelog' : 'manage,history,changelog' 
+          guest_permissions: currentUser.isAdmin ? 'add,manage,history,settings,edit,changelog' : 'manage,history,changelog',
+          login_logo_size: 250, // Default Login Logo Size
+          sidebar_logo_size: 60   // Default Sidebar Logo Size
       };
 
       if (currentUser.isGuestView) return { ...defaultSettings, guest_permissions: 'manage' };
       
       const userSettings = allRecords.find(r => r.type === 'settings' && r.account_id === currentUser.id);
-      return userSettings || defaultSettings;
+      return { ...defaultSettings, ...userSettings }; // Merge with defaults
     }
     
     function getGlobalGuestSettings() {
@@ -337,10 +339,29 @@
         return null;
     }
 
-    async function saveSettings(isDarkMode, paymentDaysBefore, guestPermissions) {
+    // Helper to get global settings for login page (before login)
+    function getGlobalLogoSettings() {
+        const adminSettings = allRecords.find(r => r.type === 'settings' && r.account_id === 'super_admin');
+        if (adminSettings) {
+            return {
+                login: adminSettings.login_logo_size || 250,
+                sidebar: adminSettings.sidebar_logo_size || 60
+            };
+        }
+        return { login: 250, sidebar: 60 };
+    }
+
+    async function saveSettings(isDarkMode, paymentDaysBefore, guestPermissions, loginLogoSize, sidebarLogoSize) {
       if (!currentUser || currentUser.isGuestView) return;
       const existing = allRecords.find(r => r.type === 'settings' && r.account_id === currentUser.id);
-      const updatedData = { is_dark_mode: isDarkMode, payment_days_before: paymentDaysBefore, guest_permissions: guestPermissions, updated_at: new Date().toISOString() };
+      const updatedData = { 
+          is_dark_mode: isDarkMode, 
+          payment_days_before: paymentDaysBefore, 
+          guest_permissions: guestPermissions,
+          login_logo_size: loginLogoSize,
+          sidebar_logo_size: sidebarLogoSize,
+          updated_at: new Date().toISOString() 
+      };
       if (existing) { await window.dataSdk.update({ ...existing, ...updatedData }); } 
       else { await window.dataSdk.create({ type: 'settings', id: 'settings_' + Date.now(), account_id: currentUser.id, created_at: new Date().toISOString(), ...updatedData }); }
       showToast('บันทึกการตั้งค่าสำเร็จ');
@@ -534,7 +555,7 @@
                 </svg>
             </button>
             <div class="flex items-center gap-2 flex-1 justify-center">
-                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[60px] h-[60px] object-contain">
+                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="h-10 w-auto object-contain">
             </div>
             <div class="w-8"></div>
           </div>
@@ -552,12 +573,16 @@
     }
 
     function renderLoginPage(config, dark, surfaceColor, textColor, primaryColor) {
+      // Get global settings for logo size
+      const globalSettings = getGlobalLogoSettings();
+      const logoSize = globalSettings.login || 250;
+
       return `
         <div class="flex items-center justify-center min-h-full p-4 w-full" style="background: ${dark ? '#111827' : config.background_color};">
           <div class="w-full max-w-md p-8 rounded-xl shadow-lg" style="background: ${surfaceColor};">
             <div class="flex flex-col items-center mb-6">
-                <!-- Large Logo, Removed Text Title -->
-                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[350px] h-[350px] mb-4 object-contain">
+                <!-- Configurable Logo Size -->
+                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" style="width: ${logoSize}px; height: ${logoSize}px;" class="mb-4 object-contain">
             </div>
             <div id="login-form" class="space-y-4">
               <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="login-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
@@ -606,11 +631,15 @@
       const mobileClasses = `absolute top-0 left-0 bottom-0 transform ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`;
       const desktopClasses = "md:relative md:translate-x-0";
 
+      // Get settings for logo
+      const settings = getUserSettings();
+      const logoSize = settings.sidebar_logo_size || 60;
+
       return `
         <div class="${baseClasses} ${mobileClasses} ${desktopClasses}" style="background: ${surfaceColor};">
           <div class="mb-4 flex flex-col items-center">
-            <!-- Sidebar Logo Expanded -->
-            <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" class="w-[200px] h-[200px] mb-2 object-contain">
+            <!-- Sidebar Logo Configurable -->
+            <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" style="width: ${logoSize}px; height: ${logoSize}px;" class="mb-2 object-contain">
             <div class="flex justify-between w-full items-start absolute top-4 right-4">
                 <button id="close-sidebar-btn" class="md:hidden text-gray-500 hover:text-gray-700">✖</button>
             </div>
@@ -626,7 +655,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.3.9 (Logo Max Size)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.4.0 (Admin Logo Config)</p>
           </div>
         </div>
       `;
@@ -735,6 +764,21 @@
             </div>
             <p class="text-xs opacity-60" style="color: ${textColor};">⚠️ การเปลี่ยนแปลงค่านี้จะทำให้ระบบรีโหลดใหม่ทันทีเพื่อเชื่อมต่อกับฐานข้อมูลใหม่</p>
         </div>
+        <div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor}; border: 1px solid ${primaryColor}40;">
+            <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: ${textColor};">
+                🎨 ตั้งค่าขนาดโลโก้ (Admin Only)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" style="color: ${textColor};">ขนาดโลโก้หน้า Login (px)</label>
+                    <input type="number" id="setting-login-logo-size" value="${settings.login_logo_size || 250}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" style="color: ${textColor};">ขนาดโลโก้เมนูข้าง (px)</label>
+                    <input type="number" id="setting-sidebar-logo-size" value="${settings.sidebar_logo_size || 60}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                </div>
+            </div>
+        </div>
     </div>
     <div class="p-6 rounded-xl shadow-md" style="background: ${surfaceColor};"><h3 class="font-semibold mb-4" style="color: ${textColor};">สิทธิ์ของผู้ไม่มีบัญชี (Guest)</h3><div class="space-y-2"><label class="flex items-center gap-3"><input type="checkbox" id="guest-manage" ${currentPermissions.includes('manage') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าจัดการรายการลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-history" ${currentPermissions.includes('history') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการทำรายการ</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-changelog" ${currentPermissions.includes('changelog') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการอัปเดต</span></label><div class="h-px bg-gray-200 my-2 dark:bg-gray-700"></div><label class="flex items-center gap-3"><input type="checkbox" id="guest-settings" ${currentPermissions.includes('settings') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าการตั้งค่า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-add" ${currentPermissions.includes('add') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าเพิ่มข้อมูลลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-edit" ${currentPermissions.includes('edit') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">แก้ไข / ชำระเงิน / ลบข้อมูล</span></label></div></div>` : ''}
       <button id="save-settings-btn" class="w-full py-3 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึกการตั้งค่า</button></div></div>`;
@@ -742,6 +786,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.4.0 (Admin Logo Config)", date: "18/01/2026", changes: ["เพิ่มระบบตั้งค่าขนาดโลโก้ได้เองในหน้า Admin Settings", "ปรับปรุงระบบ Global Settings ให้ยืดหยุ่นขึ้น"] },
         { version: "V.3.9 (Logo Max Size)", date: "18/01/2026", changes: ["ขยายขนาดโลโก้หน้า Login เป็น 350px", "ขยายขนาดโลโก้แถบเมนูข้างเป็น 200px"] },
         { version: "V.3.8 (Logo Resizing)", date: "18/01/2026", changes: ["ปรับขนาดโลโก้หน้า Login เป็น 250px", "ปรับขนาดโลโก้แถบเมนูเป็น 60px"] },
         { version: "V.3.7 (Favicon Update)", date: "18/01/2026", changes: ["เปลี่ยนไอคอนของระบบ (Favicon) เป็นไฟล์ .ico"] },
@@ -1063,7 +1108,14 @@
           saveSet.innerHTML = '<div class="spinner"></div>';
           const perms = [];
           ['add','manage','history','changelog','settings','edit'].forEach(p => { if(document.getElementById(`guest-${p}`)?.checked) perms.push(p); });
-          await saveSettings(dm.checked, parseInt(document.getElementById('payment-days-before').value), perms.join(','));
+          
+          // Admin config for logo size
+          const loginLogo = document.getElementById('setting-login-logo-size')?.value;
+          const sidebarLogo = document.getElementById('setting-sidebar-logo-size')?.value;
+          const loginSize = loginLogo ? parseInt(loginLogo) : 250;
+          const sidebarSize = sidebarLogo ? parseInt(sidebarLogo) : 60;
+
+          await saveSettings(dm.checked, parseInt(document.getElementById('payment-days-before').value), perms.join(','), loginSize, sidebarSize);
           saveSet.innerHTML = 'บันทึกการตั้งค่า';
       });
 
