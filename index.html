@@ -257,9 +257,11 @@
     }
 
     function checkLogin() {
-      // Changed: No session storage loading for strict logout
-      // We rely on memory 'currentUser' only.
-      // If user refreshes or closes, currentUser resets to null.
+      const sessionUser = sessionStorage.getItem('currentUser');
+      if (sessionUser) {
+        currentUser = JSON.parse(sessionUser);
+        if (currentUser.isGuestView && currentView === 'add') currentView = 'manage';
+      }
     }
 
     function login(username, password) {
@@ -650,7 +652,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.5 (Enter & Auto-Logout)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.6 (History Table)</p>
           </div>
         </div>
       `;
@@ -726,7 +728,37 @@
 
     function renderHistory(config, dark, surfaceColor, textColor, primaryColor) {
       const history = getHistoryRecords();
-      return `<div class="p-4 md:p-8"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_history}</h2><div class="space-y-3">${history.map(h=>`<div class="p-4 rounded-lg border-l-4 custom-surface" style="border-color: ${primaryColor};"><div class="flex justify-between items-start"><div><p class="font-semibold" style="color: ${textColor};">${h.history_action}</p><p class="text-sm mt-1" style="color: ${textColor}; opacity: 0.7;">${h.history_details}</p></div><p class="text-sm" style="color: ${textColor}; opacity: 0.6;">${new Date(h.history_date).toLocaleString('th-TH')}</p></div></div>`).join('')}</div></div>`;
+      return `
+        <div class="p-4 md:p-8">
+            <h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_history}</h2>
+            <div class="overflow-x-auto rounded-xl shadow-sm border" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
+                <table class="w-full min-w-[600px] custom-surface" style="border-radius: 12px; overflow: hidden;">
+                    <thead style="background: ${dark ? '#374151' : '#e5e7eb'};">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">วัน/เวลา</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">รายการ</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">รายละเอียด</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
+                        ${history.length === 0 ? `<tr><td colspan="3" class="px-4 py-8 text-center opacity-50" style="color: ${textColor};">ไม่พบประวัติการทำรายการ</td></tr>` : ''}
+                        ${history.map((h, idx) => `
+                            <tr style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
+                                <td class="px-4 py-3 text-sm whitespace-nowrap" style="color: ${textColor}; width: 180px;">
+                                    ${new Date(h.history_date).toLocaleString('th-TH')}
+                                </td>
+                                <td class="px-4 py-3 text-sm font-medium whitespace-nowrap" style="color: ${primaryColor}; width: 150px;">
+                                    ${h.history_action}
+                                </td>
+                                <td class="px-4 py-3 text-sm" style="color: ${textColor};">
+                                    ${h.history_details}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
     }
 
     function renderSettings(config, dark, surfaceColor, textColor, primaryColor) {
@@ -803,6 +835,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.5.6 (History Table)", date: "18/01/2026", changes: ["ปรับเปลี่ยนหน้าประวัติการทำรายการจากแบบการ์ดเป็นแบบตารางมีกรอบ"] },
         { version: "V.5.5 (Enter & Auto-Logout)", date: "18/01/2026", changes: ["เพิ่มการกด Enter เพื่อล็อกอิน", "ออกจากระบบอัตโนมัติเมื่อปิดหน้าเว็บ (Memory Session)"] },
         { version: "V.5.4 (Event Delegation Fix)", date: "18/01/2026", changes: ["แก้ปุ่มลบ/เปลี่ยนรหัสผ่านในหน้า Admin ให้กดได้แน่นอน", "เพิ่มความลื่นไหลในการตอบสนองปุ่มกด"] },
         { version: "V.5.3 (Admin Fix)", date: "18/01/2026", changes: ["แก้บั๊กหน้าจัดการผู้ใช้งานของ Admin เข้าไม่ได้ (Function name collision)", "ปรับปรุงประสิทธิภาพโค้ด"] },
