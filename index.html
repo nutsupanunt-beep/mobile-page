@@ -8,8 +8,13 @@
   <!-- ========================================== -->
   <!-- ส่วนที่แก้ไข: ใช้โลโก้จากไฟล์ edited-image.png -->
   <!-- ========================================== -->
+  <!-- 1. ไอคอนบนแถบ Browser -->
   <link rel="icon" type="image/x-icon" href="edited-image.ico">
+  
+  <!-- 2. ไอคอนสำหรับ iPhone/iPad/Android -->
   <link rel="apple-touch-icon" href="edited-image.png">
+  
+  <!-- 3. รูปภาพเวลาแชร์ -->
   <meta property="og:image" content="edited-image.png">
   <meta property="og:title" content="ระบบจัดการลูกค้าออนไลน์">
   <meta property="og:description" content="ระบบบันทึกและจัดการข้อมูลลูกค้า">
@@ -314,6 +319,8 @@
           guest_permissions: currentUser.isAdmin ? 'add,manage,history,settings,edit,changelog' : 'manage,history,changelog',
           login_logo_size: 250, 
           sidebar_logo_size: 60,
+          login_logo_margin: 24, // Default MB-6 (approx 24px)
+          sidebar_logo_margin: 16, // Default MB-4 (approx 16px)
           theme_mode: 'default',
           custom_colors: {
               hover_text: '#FFD700',
@@ -348,27 +355,25 @@
         if (adminSettings) {
             return {
                 login: adminSettings.login_logo_size || 250,
-                sidebar: adminSettings.sidebar_logo_size || 60
+                sidebar: adminSettings.sidebar_logo_size || 60,
+                login_margin: adminSettings.login_logo_margin || 24,
+                sidebar_margin: adminSettings.sidebar_logo_margin || 16
             };
         }
-        return { login: 250, sidebar: 60 };
+        return { login: 250, sidebar: 60, login_margin: 24, sidebar_margin: 16 };
     }
 
-    async function saveSettings(isDarkMode, paymentDaysBefore, guestPermissions, loginLogoSize, sidebarLogoSize, themeMode, customColors) {
+    async function saveSettings(data) {
       if (!currentUser || currentUser.isGuestView) return;
       const existing = allRecords.find(r => r.type === 'settings' && r.account_id === currentUser.id);
+      
       const updatedData = { 
-          is_dark_mode: isDarkMode, 
-          payment_days_before: paymentDaysBefore, 
-          guest_permissions: guestPermissions,
-          login_logo_size: loginLogoSize,
-          sidebar_logo_size: sidebarLogoSize,
-          theme_mode: themeMode,
-          custom_colors: customColors,
+          ...data,
           updated_at: new Date().toISOString() 
       };
+      
       if (existing) { await window.dataSdk.update({ ...existing, ...updatedData }); } 
-      else { await window.dataSdk.create({ type: 'settings', id: 'settings_' + Date.now(), account_id: currentUser.id, created_at: new Date().toISOString(), ...updatedData }); }
+      else { await window.dataSdk.create({ type: 'settings', id: 'settings_' + Date.now(), account_id: currentUser.id, ...updatedData }); }
       
       showToast('บันทึกการตั้งค่าสำเร็จ');
     }
@@ -630,12 +635,13 @@
     function renderLoginPage(config, dark, surfaceColor, textColor, primaryColor) {
       const globalSettings = getGlobalLogoSettings();
       const logoSize = globalSettings.login || 250;
+      const logoMargin = globalSettings.login_margin || 24;
 
       return `
         <div class="flex items-center justify-center min-h-full p-4 w-full" style="background: ${dark ? '#111827' : config.background_color};">
           <div class="w-full max-w-md p-8 rounded-xl shadow-lg" style="background: ${surfaceColor};">
-            <div class="flex flex-col items-center mb-6">
-                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" style="width: ${logoSize}px; height: ${logoSize}px;" class="mb-4 object-contain">
+            <div class="flex flex-col items-center" style="margin-bottom: ${logoMargin}px">
+                <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" style="width: ${logoSize}px; height: ${logoSize}px;" class="object-contain">
             </div>
             <div id="login-form" class="space-y-4">
               <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="login-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
@@ -683,13 +689,15 @@
       const baseClasses = "w-64 p-6 shadow-lg flex flex-col z-40 transition-transform duration-300 ease-in-out h-full overflow-x-hidden custom-sidebar";
       const mobileClasses = `absolute top-0 left-0 bottom-0 transform ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`;
       const desktopClasses = "md:relative md:translate-x-0";
-      
+
+      // Get settings for logo
       const settings = getUserSettings();
       const logoSize = settings.sidebar_logo_size || 60;
+      const logoMargin = settings.sidebar_logo_margin || 16;
 
       return `
         <div class="${baseClasses} ${mobileClasses} ${desktopClasses}">
-          <div class="mb-4 flex flex-col items-center">
+          <div class="flex flex-col items-center" style="margin-bottom: ${logoMargin}px">
             <img src="edited-image.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1256/1256650.png'" alt="Logo" style="width: ${logoSize}px; height: ${logoSize}px;" class="mb-2 object-contain">
             <div class="flex justify-between w-full items-start absolute top-4 right-4">
                 <button id="close-sidebar-btn" class="md:hidden text-gray-500 hover:text-gray-700">✖</button>
@@ -706,7 +714,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.4.5 (Permissions Fixed)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.4.6 (Logo Margin Config)</p>
           </div>
         </div>
       `;
@@ -790,29 +798,9 @@
       const currentDarkMode = settings ? settings.is_dark_mode : false;
       const currentDaysBefore = settings ? settings.payment_days_before : 5;
       const currentPermissions = (currentUser.isAdmin || !settings) ? 
-        (getGlobalGuestSettings()?.guest_permissions || 'manage,history,changelog') : 
-        (settings.guest_permissions || 'manage,history,changelog');
-      
-      const themeMode = settings.theme_mode || 'default';
-      const customColors = settings.custom_colors || {
-          hover_text: '#FFD700',
-          sidebar_bg: '#1F2937',
-          main_bg: '#F3F4F6',
-          card_bg: '#FFFFFF',
-          text_color: '#111827'
-      };
-
+        (settings.guest_permissions || 'manage,history,changelog') : 
+        (settings.guest_permissions || 'manage,history,changelog'); // Fix: always use settings of current user
       const isAdmin = currentUser && currentUser.isAdmin;
-
-      // Color picker generator helper
-      const colorPicker = (id, label, val) => `
-        <div>
-            <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">${label}</label>
-            <div class="flex gap-2">
-                <input type="color" id="${id}" value="${val}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
-                <input type="text" value="${val}" onchange="document.getElementById('${id}').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
-            </div>
-        </div>`;
 
       return `<div class="p-4 md:p-8 max-w-2xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_settings}</h2><div class="space-y-6">
 
@@ -822,22 +810,52 @@
           
           <div class="flex gap-4 mb-4">
             <label class="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="theme_mode" value="default" ${themeMode === 'default' ? 'checked' : ''} onchange="toggleThemeSettings(this.value)">
+                <input type="radio" name="theme_mode" value="default" ${settings.theme_mode === 'default' ? 'checked' : ''} onchange="toggleThemeSettings(this.value)">
                 <span style="color: ${textColor};">ธีมมาตรฐาน</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="theme_mode" value="custom" ${themeMode === 'custom' ? 'checked' : ''} onchange="toggleThemeSettings(this.value)">
+                <input type="radio" name="theme_mode" value="custom" ${settings.theme_mode === 'custom' ? 'checked' : ''} onchange="toggleThemeSettings(this.value)">
                 <span style="color: ${textColor};">ธีมกำหนดเอง</span>
             </label>
           </div>
 
-          <div id="custom-theme-options" class="${themeMode === 'custom' ? '' : 'hidden'} space-y-4 p-4 border rounded-lg" style="border-color: ${dark?'#4b5563':'#e5e7eb'};">
+          <div id="custom-theme-options" class="${settings.theme_mode === 'custom' ? '' : 'hidden'} space-y-4 p-4 border rounded-lg" style="border-color: ${dark?'#4b5563':'#e5e7eb'};">
                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  ${colorPicker('col-hover-text', '1. สีอักษรเมื่อเลื่อนไปโดน', customColors.hover_text)}
-                  ${colorPicker('col-sidebar-bg', '2. สีแถบด้านซ้าย', customColors.sidebar_bg)}
-                  ${colorPicker('col-main-bg', '3. สีแถบด้านขวา (พื้นหลัง)', customColors.main_bg)}
-                  ${colorPicker('col-card-bg', '4. สีพื้นหลังกล่องข้อความ', customColors.card_bg)}
-                  ${colorPicker('col-text', '5. สีอักษรปกติ', customColors.text_color)}
+                  <div>
+                    <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">1. สีอักษรเมื่อเลื่อนไปโดน</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="col-hover-text" value="${settings.custom_colors.hover_text}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
+                        <input type="text" value="${settings.custom_colors.hover_text}" onchange="document.getElementById('col-hover-text').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">2. สีแถบด้านซ้าย</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="col-sidebar-bg" value="${settings.custom_colors.sidebar_bg}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
+                        <input type="text" value="${settings.custom_colors.sidebar_bg}" onchange="document.getElementById('col-sidebar-bg').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">3. สีแถบด้านขวา (พื้นหลัง)</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="col-main-bg" value="${settings.custom_colors.main_bg}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
+                        <input type="text" value="${settings.custom_colors.main_bg}" onchange="document.getElementById('col-main-bg').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">4. สีพื้นหลังกล่องข้อความ</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="col-card-bg" value="${settings.custom_colors.card_bg}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
+                        <input type="text" value="${settings.custom_colors.card_bg}" onchange="document.getElementById('col-card-bg').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs mb-1 opacity-70" style="color: ${textColor};">5. สีอักษรปกติ</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="col-text" value="${settings.custom_colors.text_color}" class="h-8 w-12 p-0 border-0 rounded cursor-pointer">
+                        <input type="text" value="${settings.custom_colors.text_color}" onchange="document.getElementById('col-text').value = this.value" class="flex-1 px-2 py-1 text-xs rounded border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                    </div>
+                  </div>
                </div>
           </div>
 
@@ -888,6 +906,20 @@
                         <button onclick="document.getElementById('setting-sidebar-logo-size').value='60'" class="px-3 py-1 text-xs rounded border hover:bg-gray-100 dark:hover:bg-gray-700">รีเซ็ต</button>
                     </div>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" style="color: ${textColor};">ระยะห่างด้านล่างโลโก้หน้า Login (px)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="setting-login-logo-margin" value="${settings.login_logo_margin || 24}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                        <button onclick="document.getElementById('setting-login-logo-margin').value='24'" class="px-3 py-1 text-xs rounded border hover:bg-gray-100 dark:hover:bg-gray-700">รีเซ็ต</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" style="color: ${textColor};">ระยะห่างด้านล่างโลโก้เมนูข้าง (px)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="setting-sidebar-logo-margin" value="${settings.sidebar_logo_margin || 16}" class="w-full px-4 py-2 rounded-lg border text-sm" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};">
+                        <button onclick="document.getElementById('setting-sidebar-logo-margin').value='16'" class="px-3 py-1 text-xs rounded border hover:bg-gray-100 dark:hover:bg-gray-700">รีเซ็ต</button>
+                    </div>
+                </div>
             </div>
     </div>` : ''}
     <div class="p-6 rounded-xl shadow-md custom-surface"><h3 class="font-semibold mb-4" style="color: ${textColor};">สิทธิ์ของผู้ไม่มีบัญชี (Guest)</h3><div class="space-y-2"><label class="flex items-center gap-3"><input type="checkbox" id="guest-manage" ${currentPermissions.includes('manage') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าจัดการรายการลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-history" ${currentPermissions.includes('history') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการทำรายการ</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-changelog" ${currentPermissions.includes('changelog') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าประวัติการอัปเดต</span></label><div class="h-px bg-gray-200 my-2 dark:bg-gray-700"></div><label class="flex items-center gap-3"><input type="checkbox" id="guest-settings" ${currentPermissions.includes('settings') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าการตั้งค่า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-add" ${currentPermissions.includes('add') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">เข้าถึงหน้าเพิ่มข้อมูลลูกค้า</span></label><label class="flex items-center gap-3"><input type="checkbox" id="guest-edit" ${currentPermissions.includes('edit') ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color: ${primaryColor};"><span style="color: ${textColor};">แก้ไข / ชำระเงิน / ลบข้อมูล</span></label></div></div>
@@ -903,6 +935,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.4.6 (Logo Margin Config)", date: "18/01/2026", changes: ["เพิ่มการตั้งค่าระยะห่าง (Margin) ของโลโก้", "ปรับปรุงระบบตั้งค่าโลโก้ให้ครบถ้วน"] },
         { version: "V.4.4 (Color Theme)", date: "18/01/2026", changes: ["เพิ่มระบบเลือกธีมสีเองได้ (Custom Theme)", "ปรับแต่งได้ 5 สีหลักตามต้องการ"] },
         { version: "V.4.3 (Wait & Update)", date: "18/01/2026", changes: ["แก้ปัญหาสิทธิ์ผู้เยี่ยมชม (Guest)", "แก้ปัญหาหน้าตั้งค่าเด้งคืน"] },
         { version: "V.4.1 (Fix HTML)", date: "18/01/2026", changes: ["แก้ไขบั๊กหน้าตั้งค่า Admin แสดงผลผิดพลาด", "เพิ่มปุ่มรีเซ็ตขนาดโลโก้"] },
@@ -1228,6 +1261,12 @@
           const loginSize = loginLogo ? parseInt(loginLogo) : 250;
           const sidebarSize = sidebarLogo ? parseInt(sidebarLogo) : 60;
           
+          // Logo margin
+          const loginMargin = document.getElementById('setting-login-logo-margin')?.value;
+          const sidebarMargin = document.getElementById('setting-sidebar-logo-margin')?.value;
+          const loginMarginSize = loginMargin ? parseInt(loginMargin) : 24;
+          const sidebarMarginSize = sidebarMargin ? parseInt(sidebarMargin) : 16;
+          
           // Theme config
           const themeMode = document.querySelector('input[name="theme_mode"]:checked')?.value || 'default';
           const customColors = {
@@ -1238,7 +1277,7 @@
               text_color: document.getElementById('col-text')?.value || '#111827'
           };
 
-          await saveSettings(dm.checked, parseInt(document.getElementById('payment-days-before').value), perms.join(','), loginSize, sidebarSize, themeMode, customColors);
+          await saveSettings(dm.checked, parseInt(document.getElementById('payment-days-before').value), perms.join(','), loginSize, sidebarSize, themeMode, customColors, loginMarginSize, sidebarMarginSize);
           saveSet.innerHTML = 'บันทึกการตั้งค่า';
       });
 
