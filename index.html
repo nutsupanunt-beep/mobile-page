@@ -8,8 +8,13 @@
   <!-- ========================================== -->
   <!-- ส่วนที่แก้ไข: ใช้โลโก้จากไฟล์ edited-image.png -->
   <!-- ========================================== -->
+  <!-- 1. ไอคอนบนแถบ Browser -->
   <link rel="icon" type="image/x-icon" href="edited-image.ico">
+  
+  <!-- 2. ไอคอนสำหรับ iPhone/iPad/Android -->
   <link rel="apple-touch-icon" href="edited-image.png">
+  
+  <!-- 3. รูปภาพเวลาแชร์ -->
   <meta property="og:image" content="edited-image.png">
   <meta property="og:title" content="ระบบจัดการลูกค้าออนไลน์">
   <meta property="og:description" content="ระบบบันทึกและจัดการข้อมูลลูกค้า">
@@ -647,7 +652,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.2 (Fix Admin)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.5.3 (Admin Fix)</p>
           </div>
         </div>
       `;
@@ -662,14 +667,14 @@
       else if(currentView === 'history') html = renderHistory(config, dark, surfaceColor, textColor, primaryColor);
       else if(currentView === 'settings') html = renderSettings(config, dark, surfaceColor, textColor, primaryColor);
       else if(currentView === 'changelog') html = renderChangelog(config, dark, surfaceColor, textColor, primaryColor);
-      else if(currentView === 'manage_users') html = renderManageUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor);
+      else if(currentView === 'manage_users') html = renderAdminUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor);
       else if(currentView === 'account') html = renderAccount(config, dark, surfaceColor, textColor, primaryColor);
       if (showingModal || editingCustomer || editingUser) html += renderModal(config, dark, surfaceColor, textColor, primaryColor);
       return html;
     }
 
     // Using custom-surface class for cards
-    function renderManageCustomers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
+    function renderAdminUsers(config, dark, surfaceColor, textColor, primaryColor, secondaryColor) {
       const users = allRecords.filter(r => r.type === 'user');
       return `<div class="p-4 md:p-8"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">จัดการผู้ใช้งานระบบ</h2><div class="overflow-x-auto rounded-xl shadow-sm"><table class="w-full min-w-[600px] custom-surface" style="border-radius: 12px; overflow: hidden;"><thead style="background: ${dark ? '#374151' : secondaryColor};"><tr><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ชื่อผู้ใช้</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">วันที่สมัคร</th><th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th></tr></thead><tbody>${users.map((u, idx) => `<tr class="border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};"><td class="px-4 py-3" style="color: ${textColor};">${idx + 1}</td><td class="px-4 py-3 font-medium" style="color: ${textColor};">${u.username}</td><td class="px-4 py-3" style="color: ${textColor};">${new Date(u.created_at).toLocaleDateString('th-TH')}</td><td class="px-4 py-3 text-center"><div class="flex justify-center gap-2"><button data-reset-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" style="background: ${primaryColor}; color: white;" title="เปลี่ยนรหัสผ่าน">🔑</button><button data-delete-user="${u.id}" class="p-2 rounded-full shadow-sm hover:shadow-md transition-all" style="background: #ef4444; color: white;" title="ลบบัญชี">🗑️</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
     }
@@ -800,6 +805,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.5.3 (Admin Fix)", date: "18/01/2026", changes: ["แก้บั๊กหน้าจัดการผู้ใช้งานของ Admin เข้าไม่ได้ (Function name collision)", "ปรับปรุงประสิทธิภาพโค้ด"] },
         { version: "V.5.2 (Fix Admin)", date: "18/01/2026", changes: ["แก้บั๊กปุ่มลบ/รีเซ็ตในหน้า Admin ไม่ทำงาน", "ปรับปรุงความเสถียรของหน้าต่าง Modal"] },
         { version: "V.5.1 (No Draft Save)", date: "18/01/2026", changes: ["ยกเลิกระบบจำค่าข้อมูลลูกค้า (Draft) เมื่อปิดหน้าเว็บหรือออกจากระบบ", "ล้างค่าฟอร์มทุกครั้งที่เปิดใหม่"] },
         { version: "V.5.0 (Spaced Layout)", date: "18/01/2026", changes: ["ปรับระยะห่างโลโก้และเมนูให้โปร่งสบายตามากขึ้น", "เพิ่มระยะห่างระหว่างโลโก้กับชื่อบัญชี"] },
