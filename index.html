@@ -588,7 +588,10 @@
               <button id="login-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${primaryColor}; color: white;">เข้าสู่ระบบ</button>
               <button id="show-register-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ลงทะเบียนบัญชีใหม่</button>
               <button id="show-reset-btn" class="w-full py-2 text-sm font-medium" style="color: ${primaryColor};">ลืมรหัสผ่าน?</button>
-              <button id="guest-continue-btn" class="w-full py-2 text-sm font-medium underline" style="color: ${textColor}; opacity: 0.7;">เข้าดูแบบผู้เยี่ยมชม (Guest Mode)</button>
+              <button id="guest-continue-btn" class="w-full py-3 rounded-lg font-medium transition-all hover:shadow-md relative overflow-hidden group" style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px); border: 1px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}; color: ${textColor}; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                  <span class="relative z-10">ตรวจสอบยอดชำระ</span>
+                  <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+              </button>
             </div>
             <!-- ... (Other login forms kept same for brevity, but structure maintained) ... -->
             <div id="guest-select-form" class="space-y-4 hidden">
@@ -648,7 +651,7 @@
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
             <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.6.1 (Timeline)</p>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.6.2 (White Glass Button)</p>
           </div>
         </div>
       `;
@@ -838,6 +841,7 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.6.2 (White Glass Button)", date: "19/01/2026", changes: ["เปลี่ยนปุ่ม Guest เป็น 'ตรวจสอบยอดชำระ'", "ดีไซน์ปุ่มแบบ White Glassmorphism"] },
         { version: "V.6.1 (Timeline)", date: "18/01/2026", changes: ["เปลี่ยนหน้าประวัติการทำรายการเป็นรูปแบบ Timeline", "ปรับปรุงหน้าประวัติการอัปเดตให้เป็น Timeline แบบใหม่", "เพิ่มเส้นเชื่อมและจุดสีเพื่อความสวยงาม"] },
         { version: "V.6.0 (UI & Data Update)", date: "18/01/2026", changes: ["ปรับหน้าประวัติการทำรายการเป็นตารางมีกรอบ", "ปรับหน้าประวัติการอัปเดตเป็น Timeline", "แก้ไขการแสดงผลวันที่และข้อมูลให้ครบถ้วน"] },
         { version: "V.5.8 (History Timeline)", date: "18/01/2026", changes: ["เปลี่ยนหน้าประวัติการทำรายการเป็นรูปแบบ Timeline", "เพิ่มการแสดงผลวันที่และเวลาที่ชัดเจนขึ้น"] },
