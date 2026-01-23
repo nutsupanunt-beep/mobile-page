@@ -239,7 +239,8 @@
       toast.className = `toast ${isError ? 'error' : ''}`;
       toast.textContent = message;
       document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      // Increased duration to 20 seconds as requested
+      setTimeout(() => toast.remove(), 20000);
     }
 
     function showModal(content) { showingModal = content; renderApp(); }
@@ -448,7 +449,7 @@
       };
       const result = await window.dataSdk.create(newCustomer);
       if (result.isOk) {
-        await addHistory('เพิ่มลูกค้า', `เพิ่มลูกค้า ${customerData.customerName} สินค้า ${customerData.product}`);
+        await addHistory('เพิ่มข้อมูล', `เพิ่มลูกค้า ${customerData.customerName} สินค้า ${customerData.product}`);
         saveAutocompleteData(customerData); showToast('เพิ่มข้อมูลลูกค้าสำเร็จ');
         // REMOVED localStorage saving logic as requested
       } else showToast('เกิดข้อผิดพลาด: ' + result.error.message, true);
@@ -467,18 +468,52 @@
       const isComplete = newPaid >= customer.installments;
       const updates = isComplete ? { paid_installments: newPaid, status: 'completed' } : { paid_installments: newPaid, next_payment_date: addMonthsToDate(customer.next_payment_date, 1) };
       const result = await window.dataSdk.update({ ...customer, ...updates, updated_at: new Date().toISOString() });
-      if (result.isOk) { await addHistory(isComplete ? 'ชำระเงินครบ' : 'ชำระเงิน', isComplete ? `${customer.customer_name} ชำระครบแล้ว` : `ชำระเงิน ${customer.customer_name} งวดที่ ${newPaid}`); showToast(isComplete ? 'ชำระเงินครบแล้ว' : 'บันทึกการชำระเงินสำเร็จ'); }
+      if (result.isOk) { 
+        const remaining = customer.installments - newPaid;
+        const details = `${customer.customer_name} ชำระเงินค่า ${customer.product} งวดที่ ${newPaid} ราคา ${customer.monthly_payment.toLocaleString()} บาท สำเร็จ จำนวนงวดที่เหลืออีก ${remaining} งวด`;
+        await addHistory(isComplete ? 'ชำระเงินครบ' : 'ชำระเงิน', details); 
+        showToast(isComplete ? 'ชำระเงินครบแล้ว' : 'บันทึกการชำระเงินสำเร็จ'); 
+      }
+    }
+
+    // New Function for Bulk Payment
+    async function payAllForCustomer(name) {
+        const targets = getActiveCustomers().filter(c => c.customer_name === name);
+        if(targets.length === 0) return;
+        
+        let count = 0;
+        for (const c of targets) {
+            const newPaid = c.paid_installments + 1;
+            const isComplete = newPaid >= c.installments;
+            
+            const updates = isComplete 
+                ? { paid_installments: newPaid, status: 'completed', updated_at: new Date().toISOString() } 
+                : { paid_installments: newPaid, next_payment_date: addMonthsToDate(c.next_payment_date, 1), updated_at: new Date().toISOString() };
+                
+            const result = await window.dataSdk.update({ ...c, ...updates });
+            if (result.isOk) {
+                 const remaining = c.installments - newPaid;
+                 const details = `${c.customer_name} ชำระเงินค่า ${c.product} งวดที่ ${newPaid} ราคา ${c.monthly_payment.toLocaleString()} บาท สำเร็จ จำนวนงวดที่เหลืออีก ${remaining} งวด`;
+                 await addHistory(isComplete ? 'ชำระเงินครบ' : 'ชำระเงิน', details);
+                 count++;
+            }
+        }
+        showToast(`ชำระเงินเรียบร้อย ${count} รายการ`);
     }
 
     async function deleteCustomer(customerId) {
       const customer = allRecords.find(r => r.id === customerId); if (!customer) return;
       const result = await window.dataSdk.delete(customer);
-      if (result.isOk) { await addHistory('ลบลูกค้า', `ลบลูกค้า ${customer.customer_name}`); showToast('ลบข้อมูลสำเร็จ'); confirmDeleteId = null; } 
+      if (result.isOk) { await addHistory('ลบข้อมูล', `ลบลูกค้า ${customer.customer_name}`); showToast('ลบข้อมูลสำเร็จ'); confirmDeleteId = null; } 
       else showToast('เกิดข้อผิดพลาด: ' + result.error.message, true);
     }
 
     async function deleteUser(userId) {
-        const user = allRecords.find(r => r.id === userId && r.type === 'user'); if(!user) return;
+        const user = allRecords.find(r => r.id === userId && r.type === 'user'); 
+        if(!user) {
+            showToast('ไม่พบข้อมูลผู้ใช้', true);
+            return;
+        }
         const result = await window.dataSdk.delete(user);
         if(result.isOk) { showToast('ลบบัญชีผู้ใช้สำเร็จ'); hideModal(); } else showToast('ลบไม่สำเร็จ: ' + result.error.message, true);
     }
@@ -585,7 +620,7 @@
             <div id="login-form" class="space-y-4">
               <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อผู้ใช้</label><input type="text" id="login-username" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
               <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">รหัสผ่าน</label><input type="password" id="login-password" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
-              <button id="login-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${primaryColor}; color: white;">เข้าสู่ระบบ</button>
+              <button id="login-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: #3b82f6; color: white;">เข้าสู่ระบบ</button>
               <button id="show-register-btn" class="w-full py-3 rounded-lg font-medium transition-colors" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ลงทะเบียนบัญชีใหม่</button>
               <button id="show-reset-btn" class="w-full py-2 text-sm font-medium" style="color: ${primaryColor};">ลืมรหัสผ่าน?</button>
               <!-- Updated Guest Button -->
@@ -648,8 +683,9 @@
             }).join('')}
           </nav>
           <div class="mt-8 pt-6 border-t" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
-            <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ออกจากระบบ</button>
-            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.6.3 (Orange Guest)</p>
+            <!-- Sidebar Logout Button: Red Background, White Text -->
+            <button id="logout-btn" class="w-full px-4 py-2 rounded-lg font-medium transition-colors hover:bg-red-600" style="background: #ef4444; color: white;">ออกจากระบบ</button>
+            <p class="text-xs text-center mt-4 opacity-50" style="color: ${textColor};">Version V.6.8 (Colors Fixed)</p>
           </div>
         </div>
       `;
@@ -713,7 +749,24 @@
             <span class="absolute left-3 top-3.5 text-gray-400">🔍</span>
             ${manageSearchTerm ? `<button id="manage-search-clear" class="absolute right-3 top-3 text-gray-400 hover:text-gray-600 p-1">✖</button>` : ''}
         </div>
-        <div class="mb-6"><div class="p-4 md:p-6 rounded-xl shadow-md custom-surface"><h3 class="text-lg font-semibold mb-4" style="color: ${textColor};">สรุปยอดตามลูกค้า</h3><div class="flex flex-col">${summary.length===0?`<p class="text-center py-4 opacity-50" style="color: ${textColor};">ไม่พบข้อมูล</p>`:''}${summary.map(s=>`<div class="py-4 flex flex-row justify-between items-center border-b last:border-b-0" style="border-color: ${dark?'#374151':'#e5e7eb'};"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm" style="background: ${primaryColor}20; color: ${primaryColor};">${s.count}</div><div><p class="font-medium text-lg" style="color: ${textColor};">${s.name}</p><p class="text-xs opacity-70" style="color: ${textColor};">จำนวนสัญญาที่คงเหลือ</p></div></div><div class="text-right"><p class="text-xs opacity-60 mb-1" style="color: ${textColor};">ยอดรวมงวดถัดไป</p><p class="text-xl font-bold" style="color: ${primaryColor};">฿${s.totalNextMonth.toLocaleString()}</p></div></div>`).join('')}</div></div></div>
+        <div class="mb-6"><div class="p-4 md:p-6 rounded-xl shadow-md custom-surface"><h3 class="text-lg font-semibold mb-4" style="color: ${textColor};">สรุปยอดตามลูกค้า</h3><div class="flex flex-col">${summary.length===0?`<p class="text-center py-4 opacity-50" style="color: ${textColor};">ไม่พบข้อมูล</p>`:''}${summary.map(s=>`
+          <div class="py-4 flex flex-row justify-between items-center border-b last:border-b-0" style="border-color: ${dark?'#374151':'#e5e7eb'};">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm" style="background: ${primaryColor}20; color: ${primaryColor};">${s.count}</div>
+                <div>
+                    <p class="font-medium text-lg" style="color: ${textColor};">${s.name}</p>
+                    <p class="text-xs opacity-70" style="color: ${textColor};">จำนวนสัญญาที่คงเหลือ</p>
+                </div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+                <div class="text-right">
+                    <p class="text-xs opacity-60 mb-1" style="color: ${textColor};">ยอดรวมงวดถัดไป</p>
+                    <p class="text-xl font-bold" style="color: ${primaryColor};">฿${s.totalNextMonth.toLocaleString()}</p>
+                </div>
+                ${canEditData() ? `<button data-pay-all="${s.name}" class="px-3 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-all hover:shadow-md" style="background: #10b981; color: white;">💳 ชำระยอดรวม</button>` : ''}
+            </div>
+          </div>
+        `).join('')}</div></div></div>
         <div class="overflow-x-auto rounded-xl shadow-sm"><table class="w-full min-w-[900px] custom-surface" style="border-radius: 12px; overflow: hidden;"><thead style="background: ${dark?'#374151':secondaryColor};"><tr><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลำดับ</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ลูกค้า</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">สินค้า</th>${isAdmin?`<th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">เจ้าของ</th>`:''}<th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ราคาสินค้า</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">ค่างวด</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">งวดทั้งหมด</th><th class="px-4 py-3 text-left text-sm font-semibold" style="color: ${textColor};">งวดถัดไป</th><th class="px-4 py-3 text-center text-sm font-semibold" style="color: ${textColor};">การจัดการ</th></tr></thead><tbody>${customers.map((c,idx)=>{
             const canPay = canPayNow(c.next_payment_date, daysBefore);
             const hasEditPermission = canEditData();
@@ -731,11 +784,18 @@
             
             <div class="space-y-8 relative border-l-2 ml-3 md:ml-6" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
                 ${history.length === 0 ? `<div class="pl-8 text-sm opacity-60" style="color: ${textColor};">ไม่พบประวัติการทำรายการ</div>` : ''}
-                ${history.map((h, idx) => `
+                ${history.map((h, idx) => {
+                    let actionColor = primaryColor;
+                    if(h.history_action.includes('เพิ่ม')) actionColor = '#2563eb'; // Blue
+                    else if(h.history_action.includes('แก้ไข')) actionColor = '#d97706'; // Dark Yellow
+                    else if(h.history_action.includes('ลบ')) actionColor = '#dc2626'; // Red
+                    else if(h.history_action.includes('ครบ') || h.history_action.includes('ปิด')) actionColor = '#16a34a'; // Green
+                    
+                    return `
                     <div class="relative pl-8 md:pl-10">
                         <!-- Dot -->
                         <span class="absolute -left-[9px] top-4 w-4 h-4 rounded-full border-4" 
-                            style="background-color: ${primaryColor}; border-color: ${dark ? '#111827' : '#f3f4f6'};"></span>
+                            style="background-color: ${actionColor}; border-color: ${dark ? '#111827' : '#f3f4f6'};"></span>
                         
                         <!-- Content Card -->
                         <div class="p-5 rounded-xl shadow-sm border mb-6 relative group transition-all hover:-translate-y-1" 
@@ -746,7 +806,7 @@
                                 style="background: ${surfaceColor}; border-color: ${dark ? '#374151' : '#e5e7eb'};"></div>
 
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
-                                <h3 class="text-lg font-bold" style="color: ${primaryColor};">
+                                <h3 class="text-lg font-bold" style="color: ${actionColor};">
                                     ${h.history_action}
                                 </h3>
                                 <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 opacity-70 mt-1 sm:mt-0 w-fit">
@@ -759,7 +819,7 @@
                             </p>
                         </div>
                     </div>
-                `).join('')}
+                `}).join('')}
             </div>
         </div>
       `;
@@ -839,6 +899,11 @@
 
     function renderChangelog(config, dark, surfaceColor, textColor, primaryColor) {
       const logs = [
+        { version: "V.6.8 (Colors Fixed)", date: "19/01/2026", changes: ["ปุ่มออกจากระบบเป็นสีแดง ปุ่มเข้าสู่ระบบเป็นสีน้ำเงิน", "เพิ่มเวลาแสดงการแจ้งเตือนเป็น 20 วินาที"] },
+        { version: "V.6.7 (Detailed History Colors)", date: "23/01/2026", changes: ["เพิ่มรายละเอียดในประวัติการชำระเงิน", "แยกสีหัวข้อประวัติตามประเภท (เพิ่ม=น้ำเงิน, แก้ไข=เหลือง, ลบ=แดง, ชำระครบ=เขียว)"] },
+        { version: "V.6.6 (New Edit Fields)", date: "23/01/2026", changes: ["เพิ่มช่องแก้ไขค่างวดและจำนวนงวดในหน้าต่างแก้ไขข้อมูลลูกค้า"] },
+        { version: "V.6.5 (Pay Total)", date: "19/01/2026", changes: ["เพิ่มปุ่ม 'ชำระยอดรวม' เพื่อจ่ายค่างวดทุกสัญญาของลูกค้าคนเดียวพร้อมกัน", "ปรับปรุงระบบคำนวณยอดรวมรายบุคคล"] },
+        { version: "V.6.4 (Pay All Button)", date: "19/01/2026", changes: ["เพิ่มปุ่ม 'จ่ายก้อนนี้' สำหรับชำระยอดรวมทั้งหมดของลูกค้าทีเดียว"] },
         { version: "V.6.3 (Orange Guest)", date: "19/01/2026", changes: ["เปลี่ยนปุ่ม Guest เป็น 'ตรวจสอบยอดชำระ' สีส้มอำพัน"] },
         { version: "V.6.2 (White Glass Button)", date: "19/01/2026", changes: ["เปลี่ยนปุ่ม Guest เป็น 'ตรวจสอบยอดชำระ'", "ดีไซน์ปุ่มแบบ White Glassmorphism"] },
         { version: "V.6.1 (Timeline)", date: "18/01/2026", changes: ["เปลี่ยนหน้าประวัติการทำรายการเป็นรูปแบบ Timeline", "ปรับปรุงหน้าประวัติการอัปเดตให้เป็น Timeline แบบใหม่", "เพิ่มเส้นเชื่อมและจุดสีเพื่อความสวยงาม"] },
@@ -862,48 +927,7 @@
         { version: "V.4.0 (Admin Logo Config)", date: "18/01/2026", changes: ["เพิ่มระบบตั้งค่าขนาดโลโก้ได้เองในหน้า Admin Settings", "ปรับปรุงระบบ Global Settings ให้ยืดหยุ่นขึ้น"] },
         { version: "V.3.9 (Logo Max Size)", date: "18/01/2026", changes: ["ขยายขนาดโลโก้หน้า Login เป็น 350px", "ขยายขนาดโลโก้แถบเมนูข้างเป็น 200px"] }
       ];
-      
-      return `
-        <div class="p-4 md:p-8 max-w-3xl mx-auto">
-            <h2 class="text-2xl font-bold mb-8" style="color: ${textColor};">${config.menu_changelog}</h2>
-            <div class="space-y-8 relative border-l-2 ml-3 md:ml-6" style="border-color: ${dark ? '#374151' : '#e5e7eb'};">
-                ${logs.map((log, index) => `
-                    <div class="relative pl-8 md:pl-10">
-                        <!-- Dot -->
-                        <span class="absolute -left-[9px] top-4 w-4 h-4 rounded-full border-4" 
-                            style="background-color: ${primaryColor}; border-color: ${dark ? '#111827' : '#f3f4f6'};"></span>
-                        
-                        <!-- Content Card -->
-                        <div class="p-5 rounded-xl shadow-sm border mb-6 relative group transition-all hover:-translate-y-1" 
-                            style="background: ${surfaceColor}; border-color: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">
-                            
-                            <!-- Arrow -->
-                            <div class="absolute w-3 h-3 rotate-45 -left-[7px] top-6 border-l border-b" 
-                                style="background: ${surfaceColor}; border-color: ${dark ? '#374151' : '#e5e7eb'};"></div>
-
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
-                                <span class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600">
-                                    ${log.version}
-                                </span>
-                                <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 opacity-70 mt-1 sm:mt-0 w-fit">
-                                    ${log.date}
-                                </span>
-                            </div>
-                            
-                            <ul class="list-none space-y-2">
-                                ${log.changes.map(c => `
-                                    <li class="flex items-start text-sm opacity-80">
-                                        <span class="mr-2 mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                                        ${c}
-                                    </li>
-                                `).join('')}
-                            </ul>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-      `;
+      return `<div class="p-4 md:p-8 max-w-3xl mx-auto"><h2 class="text-2xl font-bold mb-6" style="color: ${textColor};">${config.menu_changelog}</h2><div class="space-y-6">${logs.map((log, index) => `<div class="p-6 rounded-xl shadow-md custom-surface relative overflow-hidden"><div class="absolute top-0 left-0 w-2 h-full" style="background: ${index === 0 ? primaryColor : (dark ? '#374151' : '#e5e7eb')}"></div><div class="flex justify-between items-start mb-4 pl-4"><div><span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide" style="background: ${index === 0 ? primaryColor + '20' : (dark ? '#374151' : '#e5e7eb')}; color: ${index === 0 ? primaryColor : textColor};">${log.version}</span><span class="ml-2 text-sm opacity-60" style="color: ${textColor};">${log.date}</span></div></div><ul class="list-disc list-inside space-y-2 pl-4">${log.changes.map(c => `<li style="color: ${textColor}; opacity: 0.8;">${c}</li>`).join('')}</ul></div>`).join('')}</div></div>`;
     }
 
     function renderAccount(config, dark, surfaceColor, textColor, primaryColor) {
@@ -927,7 +951,7 @@
       }
       if (editingCustomer) {
         const customer = allRecords.find(r => r.id === editingCustomer); if (!customer) return '';
-        return `<div class="modal-overlay"><div class="modal-content custom-surface"><h3 class="text-xl font-bold mb-4" style="color: ${textColor};">แก้ไขข้อมูลลูกค้า</h3><form id="edit-customer-form" class="space-y-4"><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อลูกค้า</label><input type="text" id="edit-customer-name" value="${customer.customer_name}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">สินค้า</label><input type="text" id="edit-product" value="${customer.product}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ราคาสินค้า</label><input type="number" id="edit-product-price" value="${customer.product_price || ''}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
+        return `<div class="modal-overlay"><div class="modal-content custom-surface"><h3 class="text-xl font-bold mb-4" style="color: ${textColor};">แก้ไขข้อมูลลูกค้า</h3><form id="edit-customer-form" class="space-y-4"><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ชื่อลูกค้า</label><input type="text" id="edit-customer-name" value="${customer.customer_name}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">สินค้า</label><input type="text" id="edit-product" value="${customer.product}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ราคาสินค้า</label><input type="number" id="edit-product-price" value="${customer.product_price || ''}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">ค่างวด</label><input type="number" id="edit-monthly-payment" value="${customer.monthly_payment || ''}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div><div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">จำนวนงวด</label><input type="number" id="edit-installments" value="${customer.installments || ''}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
         <div><label class="block text-sm font-medium mb-2" style="color: ${textColor};">วันที่ทำสัญญา</label><input type="date" id="edit-contract-date" value="${customer.contract_date}" class="w-full px-4 py-2 rounded-lg border" style="background: ${dark ? '#374151' : 'white'}; border-color: ${dark ? '#4b5563' : '#d1d5db'}; color: ${textColor};"></div>
         <div class="flex gap-4"><button type="submit" class="flex-1 py-2 rounded-lg font-medium" style="background: ${primaryColor}; color: white;">บันทึก</button><button type="button" id="cancel-edit-btn" class="flex-1 py-2 rounded-lg font-medium" style="background: ${dark ? '#374151' : '#e5e7eb'}; color: ${textColor};">ยกเลิก</button></div>${confirmDeleteId === customer.id ? `<button type="button" id="confirm-delete-btn" class="w-full py-2 rounded-lg font-medium" style="background: #ef4444; color: white;">ยืนยันการลบ</button>` : `<button type="button" id="delete-customer-btn" class="w-full py-2 rounded-lg font-medium" style="background: #ef4444; color: white;">ลบข้อมูล</button>`}</form></div></div>`;
       }
@@ -1108,6 +1132,15 @@
           e.currentTarget.innerHTML = '<div class="spinner" style="width:12px;height:12px;"></div>';
           await makePayment(id);
       }));
+      document.querySelectorAll('[data-pay-all]').forEach(b => b.addEventListener('click', async (e) => {
+          const name = e.currentTarget.dataset.payAll;
+          if(confirm(`ยืนยันการชำระยอดรวมทั้งหมดของลูกค้า ${name}?`)) {
+              e.currentTarget.innerHTML = '<div class="spinner" style="width:16px;height:16px;"></div>';
+              await payAllForCustomer(name);
+              renderApp(); // Refresh UI to remove spinner/update data
+          }
+      }));
+
       document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', (e) => {
           editingCustomer = e.currentTarget.dataset.edit;
           renderApp();
@@ -1142,7 +1175,7 @@
           });
       }
 
-      // Admin Manage User Buttons
+      // Admin Manage User Buttons (Fixed Logic)
       document.querySelectorAll('[data-delete-user]').forEach(b => b.addEventListener('click', (e) => {
           if(confirm('คุณต้องการลบบัญชีนี้ใช่หรือไม่?')) deleteUser(e.currentTarget.dataset.deleteUser);
       }));
@@ -1160,6 +1193,8 @@
               // Recalculate Next Payment Date Logic
               const customer = allRecords.find(r => r.id === editingCustomer);
               const newContractDate = document.getElementById('edit-contract-date').value;
+              const newMonthlyPayment = parseFloat(document.getElementById('edit-monthly-payment').value);
+              const newInstallments = parseInt(document.getElementById('edit-installments').value);
               let nextPaymentDate = customer.next_payment_date; // Default to existing
 
               // Always recalculate based on new contract date + paid installments + 1
@@ -1173,6 +1208,8 @@
                   customer_name: document.getElementById('edit-customer-name').value,
                   product: document.getElementById('edit-product').value,
                   product_price: parseFloat(document.getElementById('edit-product-price').value),
+                  monthly_payment: newMonthlyPayment, // Update
+                  installments: newInstallments, // Update
                   contract_date: newContractDate,
                   next_payment_date: nextPaymentDate 
               });
